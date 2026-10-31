@@ -30,10 +30,23 @@ Tool versions are recorded in each step.
 | 2 | Observability | planned |
 | 3 | SLI, SLO and error budget | planned |
 | 4 | GitOps and progressive delivery | planned |
+| 5 | CNI migration: Calico to Cilium | planned |
 
 ### 0. Diagram
 
-Architecture drawn before any install. Decisions are recorded in [docs/adr](docs/adr/).
+Architecture drawn before any install. Decisions:
+
+| ADR | Decision |
+|---|---|
+| [0001](docs/adr/0001-kubeadm.md) | Build the cluster with kubeadm |
+| [0002](docs/adr/0002-shared-containerd-with-cri.md) | Use Docker's containerd with the CRI plugin enabled |
+| [0003](docs/adr/0003-multi-arch-images.md) | Multi-arch images by default, node affinity when needed |
+| [0004](docs/adr/0004-calico-then-cilium.md) | Calico first, migrate to Cilium in step 5 |
+| [0005](docs/adr/0005-metallb-l2.md) | MetalLB in L2 mode for LoadBalancer IPs |
+| [0006](docs/adr/0006-local-path-storage.md) | local-path-provisioner for persistent volumes |
+| [0007](docs/adr/0007-untainted-control-plane.md) | Run workloads on the control plane node |
+| [0008](docs/adr/0008-traefik.md) | Traefik as Ingress and Gateway API controller |
+| [0009](docs/adr/0009-cloudnativepg.md) | CloudNativePG as the database operator |
 
 ### 1. Cluster and workloads
 
@@ -48,6 +61,10 @@ Planned.
 Planned.
 
 ### 4. GitOps and progressive delivery
+
+Planned.
+
+### 5. CNI migration: Calico to Cilium
 
 Planned.
 
