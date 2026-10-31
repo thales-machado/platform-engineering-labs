@@ -1,0 +1,116 @@
+---
+config:
+  theme: base
+  look: neo
+  themeCSS: ".nodeLabel, .edgeLabel, .cluster-label, text, span, p { font-family: Inter, sans-serif !important; } .icon-shape .label rect, .icon-shape .label { background: transparent !important; } .cluster-label span { font-weight: 600; letter-spacing: .04em; }"
+  themeVariables:
+    fontFamily: "Inter"
+    fontSize: "15px"
+    background: "#0b1120"
+    primaryColor: "#111827"
+    primaryTextColor: "#e5e7eb"
+    primaryBorderColor: "#334155"
+    lineColor: "#64748b"
+    clusterBkg: "#0f172a"
+    clusterBorder: "#1e293b"
+    titleColor: "#94a3b8"
+    edgeLabelBackground: "#0b1120"
+  flowchart:
+    curve: basis
+    nodeSpacing: 45
+    rankSpacing: 60
+    padding: 20
+---
+flowchart TB
+  user@{ icon: "lab:client", form: "rounded", label: "LAN client", pos: "b", h: 44 }
+  repo@{ icon: "lab:github", form: "rounded", label: "GitHub repo", pos: "b", h: 44 }
+
+  subgraph HOSTS["HOSTS · DEBIAN 13 · SAME LAN"]
+    direction LR
+    subgraph URA["urahara · amd64 · Ryzen 7 · 28 GiB"]
+      direction TB
+      u_home@{ icon: "lab:docker", form: "rounded", label: "homelab · Compose<br/>:80 / :443", pos: "b", h: 40 }
+      u_cp@{ icon: "lab:kubernetes", form: "rounded", label: "control plane + kubelet<br/>apiserver · etcd · scheduler", pos: "b", h: 40 }
+      u_rt@{ icon: "lab:containerd", form: "rounded", label: "containerd · CRI on", pos: "b", h: 40 }
+      u_home --- u_rt
+      u_cp --- u_rt
+    end
+    subgraph ZAN["zangetsu · arm64 · Raspberry Pi 5 · 8 GiB"]
+      direction TB
+      z_home@{ icon: "lab:docker", form: "rounded", label: "homelab · Compose<br/>:80 / :443", pos: "b", h: 40 }
+      z_wk@{ icon: "lab:rpi", form: "rounded", label: "worker · kubelet", pos: "b", h: 40 }
+      z_rt@{ icon: "lab:containerd", form: "rounded", label: "containerd · CRI on", pos: "b", h: 40 }
+      z_home --- z_rt
+      z_wk --- z_rt
+    end
+  end
+
+  subgraph CLUSTER["KUBERNETES · KUBEADM · 2 NODES · MULTI-ARCH"]
+    direction TB
+    subgraph NET["NETWORK"]
+      direction LR
+      lb@{ icon: "lab:lb", form: "rounded", label: "MetalLB L2<br/>VIP pool", pos: "b", h: 40 }
+      gw@{ icon: "lab:traefik", form: "rounded", label: "Traefik<br/>Ingress + Gateway API", pos: "b", h: 40 }
+      cni@{ icon: "lab:calico", form: "rounded", label: "Calico CNI", pos: "b", h: 40 }
+      cil@{ icon: "lab:cilium", form: "rounded", label: "Cilium · step 5", pos: "b", h: 40 }
+      cni -. migrate .-> cil
+    end
+    subgraph WL["STEP 1 · WORKLOADS"]
+      direction LR
+      app@{ icon: "lab:helm", form: "rounded", label: "sample app · Helm<br/>probes · limits · HPA", pos: "b", h: 40 }
+      db@{ icon: "lab:postgres", form: "rounded", label: "CloudNativePG", pos: "b", h: 40 }
+      pv@{ icon: "lab:disk", form: "rounded", label: "local-path PV", pos: "b", h: 40 }
+    end
+    subgraph OBS["STEPS 2-3 · OBSERVABILITY + SLO"]
+      direction LR
+      prom@{ icon: "lab:prometheus", form: "rounded", label: "Prometheus", pos: "b", h: 40 }
+      loki@{ icon: "lab:loki", form: "rounded", label: "Loki", pos: "b", h: 40 }
+      graf@{ icon: "lab:grafana", form: "rounded", label: "Grafana<br/>error budget", pos: "b", h: 40 }
+      slo@{ icon: "lab:slo", form: "rounded", label: "Sloth / Pyrra<br/>burn-rate alerts", pos: "b", h: 40 }
+    end
+    subgraph GO["STEP 4 · GITOPS"]
+      direction LR
+      argo@{ icon: "lab:argo", form: "rounded", label: "ArgoCD<br/>app-of-apps", pos: "b", h: 40 }
+      ro@{ icon: "lab:rollouts", form: "rounded", label: "Argo Rollouts<br/>canary", pos: "b", h: 40 }
+    end
+  end
+
+  z_wk -- "kubeadm join :6443" --> u_cp
+  HOSTS ==> CLUSTER
+  user -- "VIP :80 / :443" --> lb
+  user -. "host IP :80 / :443" .-> HOSTS
+  lb --> gw --> app
+  app --> db --> pv
+  prom -. scrape .-> app
+  slo --> prom
+  graf --> prom
+  graf --> loki
+  repo --> argo
+  argo -- sync --> app
+  ro -- canary --> app
+
+  classDef ext fill:#1e293b,stroke:#94a3b8,color:#f8fafc
+  classDef host fill:#1f2937,stroke:#6b7280,color:#9ca3af
+  classDef rt fill:#1f2937,stroke:#9ca3af,color:#e5e7eb
+  classDef k8s fill:#172554,stroke:#3b82f6,color:#dbeafe
+  classDef net fill:#083344,stroke:#06b6d4,color:#cffafe
+  classDef wl fill:#1e1b4b,stroke:#818cf8,color:#e0e7ff
+  classDef obs fill:#431407,stroke:#f97316,color:#ffedd5
+  classDef gitops fill:#3b0764,stroke:#c084fc,color:#f3e8ff
+  class user,repo ext
+  class u_home,z_home host
+  class u_rt,z_rt rt
+  class u_cp,z_wk k8s
+  class lb,gw,cni,cil net
+  class app,db,pv wl
+  class prom,loki,graf,slo obs
+  class argo,ro gitops
+
+  style HOSTS fill:#0b1120,stroke:#334155,color:#94a3b8
+  style CLUSTER fill:#0b1120,stroke:#3b82f6,color:#93c5fd,stroke-width:2px
+  style URA fill:#111827,stroke:#334155,color:#cbd5e1
+  style ZAN fill:#111827,stroke:#334155,color:#cbd5e1
+  style NET fill:#0f172a,stroke:#155e75,color:#67e8f9
+  style WL fill:#0f172a,stroke:#3730a3,color:#a5b4fc
+  style OBS fill:#0f172a,stroke:#9a3412,color:#fdba74
+  style GO fill:#0f172a,stroke:#6b21a8,color:#d8b4fe

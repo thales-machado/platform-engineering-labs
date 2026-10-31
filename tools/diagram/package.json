@@ -1,0 +1,13 @@
+{
+  "name": "lab-diagram-icons",
+  "private": true,
+  "description": "Icon pack and render script for lab diagrams",
+  "scripts": {
+    "build": "node build-pack.js"
+  },
+  "dependencies": {
+    "@iconify-json/logos": "1.2.18",
+    "@iconify-json/mdi": "1.2.3",
+    "@iconify-json/simple-icons": "1.2.101"
+  }
+}
