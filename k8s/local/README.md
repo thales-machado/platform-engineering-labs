@@ -165,7 +165,7 @@ docker ps --format '{{.Names}}\t{{.Status}}' | head
 - `apt-mark hold` stops an `apt upgrade` from changing the Kubernetes runtime by surprise.
 - Expected: `disabled_plugins = []`, `SystemdCgroup = true`, version 2.4.2, the three CRI plugins with status `ok`, Docker containers still up. A containerd restart does not stop running containers: each one has its own shim.
 
-urahara (2026-11-05): all as expected.
+urahara and zangetsu (2026-11-05): all as expected. Both nodes run containerd 2.4.2-3 with CRI enabled, held.
 
 ### 2. Observability
 
