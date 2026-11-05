@@ -25,7 +25,7 @@ Tool versions are recorded in each step.
 
 | # | Step | Status |
 |---|---|---|
-| 0 | Diagram | in progress |
+| 0 | Diagram | done |
 | 1 | Cluster and workloads | planned |
 | 2 | Observability | planned |
 | 3 | SLI, SLO and error budget | planned |
@@ -34,7 +34,7 @@ Tool versions are recorded in each step.
 
 ### 0. Diagram
 
-Architecture drawn before any install. Decisions:
+Architecture drawn before any install. Reviewed and approved on 2026-11-05. Decisions:
 
 | ADR | Decision |
 |---|---|
