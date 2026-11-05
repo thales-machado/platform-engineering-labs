@@ -338,6 +338,33 @@ Result (2026-11-05): new tables `ip calico`, `ip kube-proxy` and `ip6 kube-proxy
 
 Leftovers: the old kube-proxy iptables chains (`KUBE-SVC-*`, `KUBE-SEP-*`, `KUBE-NODEPORTS`, `KUBE-MARK-MASQ` and others) stay in `ip nat` and `ip filter`. kube-proxy does not remove them when it switches modes. `KUBE-KUBELET-CANARY` and `KUBE-FIREWALL` belong to kubelet and stay.
 
+Check that no base chain jumps to them (only kubelet's `KUBE-FIREWALL` should show), on both nodes:
+
+```bash
+for c in PREROUTING OUTPUT POSTROUTING; do sudo nft list chain ip nat $c | grep -E 'jump KUBE'; done
+for c in INPUT FORWARD OUTPUT; do sudo nft list chain ip filter $c | grep -E 'jump KUBE'; done
+```
+
+List the orphan chains (dry run), then flush and delete them. kubelet's chains are excluded:
+
+```bash
+for t in "ip nat" "ip filter" "ip6 nat" "ip6 filter"; do
+  echo "== $t"
+  sudo nft list table $t 2>/dev/null | awk '/^[[:space:]]*chain KUBE-/{print $2}' | grep -vE '^KUBE-(FIREWALL|KUBELET-CANARY)$'
+done
+
+for t in "ip nat" "ip filter" "ip6 nat" "ip6 filter"; do
+  chains=$(sudo nft list table $t 2>/dev/null | awk '/^[[:space:]]*chain KUBE-/{print $2}' | grep -vE '^KUBE-(FIREWALL|KUBELET-CANARY)$')
+  for c in $chains; do sudo nft flush chain $t "$c"; done
+  for c in $chains; do sudo nft delete chain $t "$c"; done
+done
+sudo nft list ruleset | grep -E 'chain KUBE-'
+```
+
+Result (2026-11-05): urahara had no leftovers (kube-proxy cleaned up there, because iptables can read its `ip nat`). zangetsu had 19 chains in `ip nat`, 4 in `ip filter` and a few in the ip6 tables, all removed. Only `KUBE-FIREWALL`, `KUBE-KUBELET-CANARY` and `KUBE-IPTABLES-HINT` remain. All pods `Running`, Docker containers up on both nodes.
+
+Postmortem: [2026-11-05-calico-node-crash-nftables-rules](docs/postmortems/2026-11-05-calico-node-crash-nftables-rules.md).
+
 ### 2. Observability
 
 Planned.
