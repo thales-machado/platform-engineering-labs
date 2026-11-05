@@ -503,6 +503,39 @@ Result (2026-11-05): `.241` to `.247` and `.249` free; `.248` answers ping and A
 
 kube-proxy in nftables mode needs no extra setting for MetalLB L2. The `strictARP` change found in many guides is only for IPVS mode.
 
+Install (official manifest), then the pool from [manifests/metallb-pool.yaml](manifests/metallb-pool.yaml). Wait for the controller before applying the pool: the pool is validated by MetalLB's webhook.
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.16.2/config/manifests/metallb-native.yaml
+kubectl -n metallb-system wait --for=condition=Ready pod --all --timeout=180s
+kubectl -n metallb-system get pods -o wide
+kubectl apply -f metallb-pool.yaml
+kubectl -n metallb-system get ipaddresspools,l2advertisements
+```
+
+Result (2026-11-05): controller and pool fine; the speaker on zangetsu in `CrashLoopBackOff`. Its log (`kubectl -n metallb-system logs <speaker-pod> --previous`) ends with:
+
+```
+failed to start metrics server: listen tcp 0.0.0.0:9120: bind: address already in use
+```
+
+The speaker runs with `hostNetwork`, so its metrics port competes with the host's ports. A Docker container on zangetsu publishes 9120, and another one on urahara publishes 9121. 7472 (MetalLB's old default) is free on both, so the speaker moves there:
+
+```bash
+sudo ss -tlnp | grep -E ':(9120|9121|7472) '    # on both nodes
+
+kubectl -n metallb-system patch daemonset speaker --type=json -p='[
+  {"op":"replace","path":"/spec/template/spec/containers/0/args/0","value":"--port=7472"},
+  {"op":"replace","path":"/spec/template/spec/containers/0/ports/0/containerPort","value":7472},
+  {"op":"replace","path":"/spec/template/metadata/annotations/prometheus.io~1port","value":"7472"}
+]'
+kubectl -n metallb-system rollout status daemonset/speaker
+```
+
+Both speakers `1/1 Running`. This patch differs from the upstream manifest: re-applying the official file undoes it. In step 4 (GitOps) it becomes a Kustomize patch.
+
+Lesson: every `hostNetwork` component needs a port check on every node before install. Ports used by MetalLB on the nodes: 7946 TCP/UDP (memberlist), 7472 (metrics), 17472 (health probe, localhost).
+
 ### 2. Observability
 
 Planned.
