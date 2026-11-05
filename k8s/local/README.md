@@ -106,6 +106,34 @@ docker ps --format '{{.Names}}\t{{.Status}}' | head
 
 urahara and zangetsu (2026-11-05): all three values `= 1`, all containers still up.
 
+#### 1.3 Swap off
+
+kubelet does not start with swap on (default config). Each node creates swap in a different way, so each needs a different fix.
+
+urahara: swap partition in `/etc/fstab`.
+
+```bash
+sudo swapoff -a
+sudo cp /etc/fstab /etc/fstab.bak
+sudo sed -i '/\sswap\s/ s/^/#/' /etc/fstab
+sudo systemctl daemon-reload
+grep swap /etc/fstab
+cat /proc/swaps
+```
+
+Expected: the swap line in fstab starts with `#`, and `/proc/swaps` shows only the header.
+
+zangetsu: zram created at boot by `rpi-swap` (Raspberry Pi OS on Debian 13), configured in `/etc/rpi/swap.conf`. Swap is turned off with a drop-in, which survives package updates.
+
+```bash
+sudo mkdir -p /etc/rpi/swap.conf.d
+printf '[Main]\nMechanism=none\n' | sudo tee /etc/rpi/swap.conf.d/90-k8s-no-swap.conf
+sudo swapoff -a
+cat /proc/swaps
+```
+
+Finding (2026-11-05): on zangetsu, `swapoff -a` failed with `Cannot allocate memory`. The kernel moved part of the swap back to RAM (about 520 MB down to 110 MB) and then stopped, because there was not enough free RAM for the rest. The drop-in is already in place, so a reboot starts the node with no swap. Lesson: the Raspberry Pi has little memory headroom with the current Docker services, which matters for scheduling (ADR 0003, node affinity).
+
 ### 2. Observability
 
 Planned.
