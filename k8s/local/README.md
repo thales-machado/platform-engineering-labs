@@ -48,6 +48,7 @@ Architecture drawn before any install. Reviewed and approved on 2026-11-05. Deci
 | [0008](docs/adr/0008-traefik.md) | Traefik as Ingress and Gateway API controller |
 | [0009](docs/adr/0009-cloudnativepg.md) | CloudNativePG as the database operator |
 | [0010](docs/adr/0010-install-1-36-then-upgrade.md) | Install Kubernetes 1.36, then upgrade to 1.37 (added in step 1) |
+| [0011](docs/adr/0011-nftables-dataplane.md) | nftables data plane for kube-proxy and Calico (added in step 1) |
 
 ### 1. Cluster and workloads
 
@@ -296,6 +297,30 @@ curl -s https://api.github.com/repos/projectcalico/calico/releases/latest | grep
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/operator-crds.yaml
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/tigera-operator.yaml
 kubectl create -f calico-installation.yaml
+watch kubectl get tigerastatus
+```
+
+Result (2026-11-05): everything available on urahara, but `calico` stayed `PROGRESSING` and calico-node on zangetsu stayed `0/1`. Felix panicked on every start: `iptables-nft-save failed because there are incompatible nft rules in the table nat`. Cause: Tailscale on zangetsu runs in forced nftables mode and adds native nftables rules to the shared `ip nat` table, which the iptables inside the calico-node image cannot read. Tailscale cannot use iptables mode on that kernel (no legacy `ip_tables`). Decision: move the cluster to nftables, see ADR 0011.
+
+Note: `kubectl` on zangetsu fails with `the server could not find the requested resource`. Workers have no kubeconfig, so kubectl falls back to `localhost:8080`, where an unrelated Docker service answers. Run kubectl on urahara.
+
+#### 1.10 Switch to the nftables data plane (ADR 0011)
+
+kube-proxy first, because Calico's nftables mode requires it.
+
+```bash
+kubectl -n kube-system get configmap kube-proxy -o yaml | grep 'mode:'
+kubectl -n kube-system get configmap kube-proxy -o yaml | sed 's/mode: ""/mode: "nftables"/' | kubectl apply -f -
+kubectl -n kube-system get configmap kube-proxy -o yaml | grep 'mode:'
+kubectl -n kube-system rollout restart daemonset/kube-proxy
+kubectl -n kube-system rollout status daemonset/kube-proxy
+kubectl -n kube-system logs daemonset/kube-proxy | grep -i -m3 nftables
+```
+
+Then Calico:
+
+```bash
+kubectl patch installation default --type=merge -p '{"spec":{"calicoNetwork":{"linuxDataplane":"Nftables"}}}'
 watch kubectl get tigerastatus
 ```
 
