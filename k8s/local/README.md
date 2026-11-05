@@ -486,6 +486,23 @@ Note: right after boot, `k8s-docker-user` shows `inactive` until Docker starts (
 
 Smoke test after both reboots (2026-11-05, step 1.11 commands): ping `0% packet loss` both ways, `nslookup` answers `10.96.0.1`. The base cluster is persistent.
 
+#### 1.14 MetalLB (ADR 0005)
+
+Preflight, read-only. Check that the planned pool IPs are free on the LAN: ping finds devices that answer ICMP, and the ARP table finds devices that block ping. `REACHABLE` or `STALE` with a MAC address means in use; `FAILED` or `INCOMPLETE` means free.
+
+```bash
+for i in $(seq 241 249); do
+  ping -c1 -W1 <LAN_PREFIX>.$i >/dev/null 2>&1 && echo "<LAN_PREFIX>.$i  answers ping (IN USE)" || echo "<LAN_PREFIX>.$i  no ping"
+done
+ip neigh show | grep -E '<LAN_PREFIX>\.24[1-9] '
+sudo ss -tulnp | grep 7946    # memberlist port of the MetalLB speaker, on both nodes
+curl -s https://api.github.com/repos/metallb/metallb/releases/latest | grep tag_name
+```
+
+Result (2026-11-05): `.241` to `.247` and `.249` free; `.248` answers ping and ARP (a device with a Raspberry Pi MAC), so it is excluded. Pool: `.241` to `.247` (7 IPs). Port 7946 free. Latest MetalLB: `v0.16.2`.
+
+kube-proxy in nftables mode needs no extra setting for MetalLB L2. The `strictARP` change found in many guides is only for IPVS mode.
+
 ### 2. Observability
 
 Planned.
