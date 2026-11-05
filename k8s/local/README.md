@@ -484,6 +484,8 @@ After the second reboot: no swap, `systemd.gpt_auto=0` in `/proc/cmdline`, both 
 
 Note: right after boot, `k8s-docker-user` shows `inactive` until Docker starts (on urahara, about 2 minutes after boot), then `active (exited)`. That is expected: the unit is wanted by `docker.service`. After the reboot, urahara's `FORWARD` policy was `accept`, because the sysctl turns forwarding on before Docker starts; the `DOCKER-USER` rules were present anyway.
 
+Smoke test after both reboots (2026-11-05, step 1.11 commands): ping `0% packet loss` both ways, `nslookup` answers `10.96.0.1`. The base cluster is persistent.
+
 ### 2. Observability
 
 Planned.
