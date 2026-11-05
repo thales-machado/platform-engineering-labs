@@ -104,7 +104,7 @@ Expected: the three values show `= 1`. `bridge-nf-call-iptables` also changes ho
 docker ps --format '{{.Names}}\t{{.Status}}' | head
 ```
 
-urahara (2026-11-05): all three values `= 1`, all containers still up.
+urahara and zangetsu (2026-11-05): all three values `= 1`, all containers still up.
 
 ### 2. Observability
 
