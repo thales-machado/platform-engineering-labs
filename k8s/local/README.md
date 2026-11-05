@@ -49,6 +49,7 @@ Architecture drawn before any install. Reviewed and approved on 2026-11-05. Deci
 | [0009](docs/adr/0009-cloudnativepg.md) | CloudNativePG as the database operator |
 | [0010](docs/adr/0010-install-1-36-then-upgrade.md) | Install Kubernetes 1.36, then upgrade to 1.37 (added in step 1) |
 | [0011](docs/adr/0011-nftables-dataplane.md) | nftables data plane for kube-proxy and Calico (added in step 1) |
+| [0012](docs/adr/0012-docker-user-accept-pod-cidr.md) | Accept pod traffic in Docker's DOCKER-USER chain (added in step 1) |
 
 ### 1. Cluster and workloads
 
@@ -364,6 +365,78 @@ sudo nft list ruleset | grep -E 'chain KUBE-'
 Result (2026-11-05): urahara had no leftovers (kube-proxy cleaned up there, because iptables can read its `ip nat`). zangetsu had 19 chains in `ip nat`, 4 in `ip filter` and a few in the ip6 tables, all removed. Only `KUBE-FIREWALL`, `KUBE-KUBELET-CANARY` and `KUBE-IPTABLES-HINT` remain. All pods `Running`, Docker containers up on both nodes.
 
 Postmortem: [2026-11-05-calico-node-crash-nftables-rules](docs/postmortems/2026-11-05-calico-node-crash-nftables-rules.md).
+
+#### 1.11 Smoke test: pod-to-pod across nodes and DNS
+
+`Ready` nodes do not prove the pod network works. One pod on each node, then ping both ways and resolve a Service name from zangetsu (CoreDNS runs on urahara):
+
+```bash
+kubectl run net-a --image=busybox:1.36 --restart=Never --overrides='{"spec":{"nodeName":"urahara"}}' -- sleep 3600
+kubectl run net-b --image=busybox:1.36 --restart=Never --overrides='{"spec":{"nodeName":"zangetsu"}}' -- sleep 3600
+kubectl wait --for=condition=Ready pod/net-a pod/net-b --timeout=120s
+kubectl get pods -o wide
+
+kubectl exec net-a -- ping -c3 "$(kubectl get pod net-b -o jsonpath='{.status.podIP}')"
+kubectl exec net-b -- ping -c3 "$(kubectl get pod net-a -o jsonpath='{.status.podIP}')"
+kubectl exec net-b -- nslookup kubernetes.default.svc.cluster.local
+```
+
+First result (2026-11-05): 100% packet loss both ways, DNS `connection timed out`. Cause: Docker's `FORWARD` policy `drop` on urahara. In nftables mode, Calico's own table cannot override it (ADR 0012).
+
+```bash
+sudo nft list chain ip filter FORWARD | head -8
+sudo nft list chain ip filter DOCKER-USER
+```
+
+urahara: `policy drop`. zangetsu: `policy accept` (forwarding was already on when Docker started). Temporary test on urahara, in memory only:
+
+```bash
+sudo nft insert rule ip filter DOCKER-USER ip saddr 10.244.0.0/16 accept
+sudo nft insert rule ip filter DOCKER-USER ip daddr 10.244.0.0/16 accept
+```
+
+After it: ping `0% packet loss` (about 0.3 ms), and `nslookup` answers `10.96.0.1` through `10.96.0.10`.
+
+#### 1.12 Make the DOCKER-USER rules permanent (ADR 0012)
+
+On both nodes:
+
+```bash
+sudo tee /usr/local/sbin/k8s-docker-user.sh >/dev/null <<'EOF'
+#!/bin/sh
+# Accept Kubernetes pod traffic in Docker's DOCKER-USER chain (ADR 0012).
+set -eu
+CIDR=10.244.0.0/16
+for dir in saddr daddr; do
+  nft list chain ip filter DOCKER-USER | grep -q "ip $dir $CIDR accept" \
+    || nft insert rule ip filter DOCKER-USER ip "$dir" "$CIDR" accept
+done
+EOF
+sudo chmod 755 /usr/local/sbin/k8s-docker-user.sh
+
+sudo tee /etc/systemd/system/k8s-docker-user.service >/dev/null <<'EOF'
+[Unit]
+Description=Accept Kubernetes pod traffic in Docker's DOCKER-USER chain
+After=docker.service
+Requires=docker.service
+PartOf=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/k8s-docker-user.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=docker.service
+EOF
+
+sudo systemctl daemon-reload
+sudo systemctl enable --now k8s-docker-user.service
+systemctl status k8s-docker-user.service --no-pager | head -4
+sudo nft list chain ip filter DOCKER-USER
+```
+
+The script is idempotent: if the rules already exist (like the temporary ones on urahara), it does not add them again.
 
 ### 2. Observability
 
