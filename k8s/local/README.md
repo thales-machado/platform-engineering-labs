@@ -324,6 +324,20 @@ kubectl patch installation default --type=merge -p '{"spec":{"calicoNetwork":{"l
 watch kubectl get tigerastatus
 ```
 
+The operator only changes the Felix configuration: Felix reloads inside the running calico-node pods, so pod names and ages do not change. With `NFTablesMode: Auto`, Felix follows the kube-proxy mode.
+
+Check on a node and from urahara:
+
+```bash
+sudo nft list tables
+kubectl get installation default -o jsonpath='{.spec.calicoNetwork.linuxDataplane}{"\n"}'
+kubectl logs -n calico-system <calico-node-pod> -c calico-node --since=2m | grep -iE 'panic|incompatible'
+```
+
+Result (2026-11-05): new tables `ip calico`, `ip kube-proxy` and `ip6 kube-proxy`; no Felix errors since the switch; calico-node `1/1` on both nodes with no new restarts.
+
+Leftovers: the old kube-proxy iptables chains (`KUBE-SVC-*`, `KUBE-SEP-*`, `KUBE-NODEPORTS`, `KUBE-MARK-MASQ` and others) stay in `ip nat` and `ip filter`. kube-proxy does not remove them when it switches modes. `KUBE-KUBELET-CANARY` and `KUBE-FIREWALL` belong to kubelet and stay.
+
 ### 2. Observability
 
 Planned.
