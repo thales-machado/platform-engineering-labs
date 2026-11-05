@@ -47,6 +47,7 @@ Architecture drawn before any install. Reviewed and approved on 2026-11-05. Deci
 | [0007](docs/adr/0007-untainted-control-plane.md) | Run workloads on the control plane node |
 | [0008](docs/adr/0008-traefik.md) | Traefik as Ingress and Gateway API controller |
 | [0009](docs/adr/0009-cloudnativepg.md) | CloudNativePG as the database operator |
+| [0010](docs/adr/0010-install-1-36-then-upgrade.md) | Install Kubernetes 1.36, then upgrade to 1.37 (added in step 1) |
 
 ### 1. Cluster and workloads
 
@@ -166,6 +167,8 @@ docker ps --format '{{.Names}}\t{{.Status}}' | head
 - Expected: `disabled_plugins = []`, `SystemdCgroup = true`, version 2.4.2, the three CRI plugins with status `ok`, Docker containers still up. A containerd restart does not stop running containers: each one has its own shim.
 
 urahara and zangetsu (2026-11-05): all as expected. Both nodes run containerd 2.4.2-3 with CRI enabled, held.
+
+Incident: rebooting zangetsu in step 1.3 restarted CrowdSec on urahara, which reads logs from Loki on zangetsu. Postmortem: [2026-11-05-crowdsec-restart-after-node-reboot](docs/postmortems/2026-11-05-crowdsec-restart-after-node-reboot.md).
 
 ### 2. Observability
 
