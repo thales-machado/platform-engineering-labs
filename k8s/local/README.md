@@ -438,6 +438,10 @@ sudo nft list chain ip filter DOCKER-USER
 
 The script is idempotent: if the rules already exist (like the temporary ones on urahara), it does not add them again.
 
+Smoke test again after the unit (2026-11-05): ping `0% packet loss` both ways (about 0.3 ms), `nslookup` answers `10.96.0.1`. The pod network works across both nodes.
+
+Postmortem: [2026-11-05-pod-traffic-dropped-by-docker-forward](docs/postmortems/2026-11-05-pod-traffic-dropped-by-docker-forward.md).
+
 ### 2. Observability
 
 Planned.
