@@ -1,0 +1,27 @@
+# Calico v3.33.0, installed by the Tigera operator (ADR 0004).
+# Based on manifests/custom-resources.yaml from the Calico release, with two changes:
+# - cidr 10.244.0.0/16 instead of 192.168.0.0/16, which overlaps the LAN.
+# - node address from the Kubernetes node InternalIP (set with kubelet --node-ip),
+#   so Calico never picks the unused second Ethernet port on urahara.
+# Goldmane and Whisker are left out to save memory on the Raspberry Pi.
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+      - name: default-ipv4-ippool
+        blockSize: 26
+        cidr: 10.244.0.0/16
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()
+    nodeAddressAutodetectionV4:
+      kubernetes: NodeInternalIP
+---
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}

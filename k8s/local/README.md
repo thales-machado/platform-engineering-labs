@@ -241,6 +241,62 @@ sudo kubeadm init --config ~/kubeadm-config.yaml
 
 urahara (2026-11-05): `Your Kubernetes control-plane has initialized successfully!` The API server certificate covers the node IP and the first service IP (`10.96.0.1`). The output ends with a `kubeadm join` command with a token and a CA hash: keep it out of Git, the token expires in 24 hours.
 
+#### 1.7 kubectl access and control-plane taint (ADR 0007)
+
+```bash
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+kubectl get nodes -o wide
+kubectl get pods -n kube-system -o wide
+kubectl taint nodes urahara node-role.kubernetes.io/control-plane:NoSchedule-
+```
+
+urahara (2026-11-05): node `NotReady` (no CNI yet), INTERNAL-IP is the main port, runtime `containerd://2.4.2`. etcd, kube-apiserver, kube-controller-manager, kube-scheduler and kube-proxy `Running`; both CoreDNS pods `Pending` until the CNI is installed. Taint removed: `node/urahara untainted`.
+
+#### 1.8 Join zangetsu
+
+The join also uses a config file, so the node IP is explicit. `<TOKEN>` and `<CA_HASH>` come from the `kubeadm init` output and stay out of Git.
+
+```bash
+cat <<'EOF' > ~/kubeadm-join.yaml
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: JoinConfiguration
+discovery:
+  bootstrapToken:
+    apiServerEndpoint: <URAHARA_IP>:6443
+    token: <TOKEN>
+    caCertHashes:
+      - sha256:<CA_HASH>
+nodeRegistration:
+  name: zangetsu
+  criSocket: unix:///run/containerd/containerd.sock
+  kubeletExtraArgs:
+    - name: node-ip
+      value: <ZANGETSU_IP>
+EOF
+
+sudo kubeadm join --config ~/kubeadm-join.yaml
+```
+
+#### 1.9 Calico (ADR 0004)
+
+Latest Calico release on 2026-11-05:
+
+```bash
+curl -s https://api.github.com/repos/projectcalico/calico/releases/latest | grep tag_name
+```
+
+`v3.33.0`. Install the operator, then the Installation from [manifests/calico-installation.yaml](manifests/calico-installation.yaml):
+
+```bash
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/operator-crds.yaml
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/tigera-operator.yaml
+kubectl create -f calico-installation.yaml
+watch kubectl get tigerastatus
+```
+
 ### 2. Observability
 
 Planned.
