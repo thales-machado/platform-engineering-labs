@@ -79,6 +79,33 @@ Results (2026-11-05):
 
 To fix before `kubeadm init`: swap, `br_netfilter` and its sysctls, and the CRI plugin.
 
+#### 1.2 Kernel modules and sysctl
+
+Load `br_netfilter` now and on every boot, and set the network values kubeadm checks. Run on both nodes.
+
+```bash
+cat <<EOF | sudo tee /etc/modules-load.d/k8s.conf
+overlay
+br_netfilter
+EOF
+sudo modprobe br_netfilter
+
+cat <<EOF | sudo tee /etc/sysctl.d/99-k8s.conf
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+sudo sysctl --system | grep -E 'bridge-nf|ip_forward'
+```
+
+Expected: the three values show `= 1`. `bridge-nf-call-iptables` also changes how Docker bridge traffic is filtered, so check the Compose services after the change:
+
+```bash
+docker ps --format '{{.Names}}\t{{.Status}}' | head
+```
+
+urahara (2026-11-05): all three values `= 1`, all containers still up.
+
 ### 2. Observability
 
 Planned.
