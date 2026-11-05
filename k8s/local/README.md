@@ -26,7 +26,7 @@ Tool versions are recorded in each step.
 | # | Step | Status |
 |---|---|---|
 | 0 | Diagram | done |
-| 1 | Cluster and workloads | planned |
+| 1 | Cluster and workloads | in progress |
 | 2 | Observability | planned |
 | 3 | SLI, SLO and error budget | planned |
 | 4 | GitOps and progressive delivery | planned |
@@ -50,7 +50,34 @@ Architecture drawn before any install. Reviewed and approved on 2026-11-05. Deci
 
 ### 1. Cluster and workloads
 
-Planned.
+#### 1.1 Preflight
+
+Read-only checks on both nodes before any change. On Debian, `sysctl` and `swapon` live in `/usr/sbin`, which is not in a normal user's PATH: run them with `sudo` or read `/proc` directly.
+
+```bash
+nproc; free -h; df -h /
+cat /proc/swaps
+sudo ss -tlnp | grep -E ':(80|443|6443|10250) '
+lsmod | grep -E 'overlay|br_netfilter'
+sudo sysctl net.ipv4.ip_forward net.bridge.bridge-nf-call-iptables
+containerd config dump | grep -A2 disabled_plugins
+```
+
+Results (2026-11-05):
+
+| Check | urahara | zangetsu | Needed for kubeadm |
+|---|---|---|---|
+| CPU / RAM available | 16 threads / 19 GiB | 4 cores / 4.6 GiB | 2 CPU / 2 GiB minimum |
+| Swap | 28 GiB disk partition, on | 2 GiB zram, on | off (default kubelet config) |
+| Ports 80/443 | 80 used by Docker (node IP only) | 80 and 443 used by Docker (all addresses) | free for Traefik only if it uses hostPort; with MetalLB IPs it does not conflict |
+| Ports 6443/10250 | free | free | free |
+| `overlay` module | loaded | loaded | loaded |
+| `br_netfilter` module | not loaded | not loaded | loaded |
+| `net.ipv4.ip_forward` | 1 | 1 | 1 |
+| `bridge-nf-call-iptables` | missing (module not loaded) | missing (module not loaded) | 1 |
+| containerd CRI plugin | disabled | disabled | enabled (ADR 0002) |
+
+To fix before `kubeadm init`: swap, `br_netfilter` and its sysctls, and the CRI plugin.
 
 ### 2. Observability
 
