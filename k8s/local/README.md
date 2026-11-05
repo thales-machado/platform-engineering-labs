@@ -280,6 +280,8 @@ EOF
 sudo kubeadm join --config ~/kubeadm-join.yaml
 ```
 
+zangetsu (2026-11-05): `This node has joined the cluster`. Two warnings, both harmless: `missing optional cgroups: hugetlb` (the Raspberry Pi kernel has no hugetlb cgroup; nothing in the lab uses huge pages) and the kube-proxy `bindAddress` recommendation (`::` instead of `0.0.0.0`, only relevant for IPv6). Both nodes show `NotReady` until Calico is up.
+
 #### 1.9 Calico (ADR 0004)
 
 Latest Calico release on 2026-11-05:
