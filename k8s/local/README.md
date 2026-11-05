@@ -194,7 +194,52 @@ kubectl version --client
 systemctl status kubelet --no-pager | head -5
 ```
 
-Expected: version v1.36.6 for kubeadm and kubectl. kubelet restarts every few seconds (`activating (auto-restart)`): this is normal before `kubeadm init`, because it has no config yet.
+Expected: version v1.36.6 for kubeadm and kubectl. kubelet shows `inactive (dead)`: `systemctl enable` without `--now` only enables it for boot, and `kubeadm init` starts it.
+
+#### 1.6 Control plane on urahara (`kubeadm init`)
+
+A plain `kubeadm init` would use defaults that do not fit this lab: no pod CIDR (Calico needs `10.244.0.0/16`, ADR 0004) and an automatic node IP (the node has a second, unused Ethernet port). It also needs `sudo`: run without it, the preflight stops with `[ERROR IsPrivilegedUser]`.
+
+So the cluster starts from a config file. `<URAHARA_IP>` is the node's LAN IP.
+
+```bash
+cat <<'EOF' > ~/kubeadm-config.yaml
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  advertiseAddress: <URAHARA_IP>
+  bindPort: 6443
+nodeRegistration:
+  name: urahara
+  criSocket: unix:///run/containerd/containerd.sock
+  kubeletExtraArgs:
+    - name: node-ip
+      value: <URAHARA_IP>
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+kubernetesVersion: v1.36.6
+clusterName: lab-local
+controlPlaneEndpoint: <URAHARA_IP>:6443
+networking:
+  podSubnet: 10.244.0.0/16
+  serviceSubnet: 10.96.0.0/12
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+cgroupDriver: systemd
+EOF
+
+kubeadm config validate --config ~/kubeadm-config.yaml
+sudo kubeadm config images pull --config ~/kubeadm-config.yaml
+sudo kubeadm init --config ~/kubeadm-config.yaml
+```
+
+- `kubernetesVersion` is fixed, so kubeadm does not look up the newest release online.
+- `cgroupDriver: systemd` matches `SystemdCgroup = true` in containerd (step 1.4).
+- Images pulled for 1.36.6: kube-apiserver, kube-controller-manager, kube-scheduler, kube-proxy v1.36.6, coredns v1.14.2, pause 3.10.2, etcd 3.6.8-0.
+
+urahara (2026-11-05): `Your Kubernetes control-plane has initialized successfully!` The API server certificate covers the node IP and the first service IP (`10.96.0.1`). The output ends with a `kubeadm join` command with a token and a CA hash: keep it out of Git, the token expires in 24 hours.
 
 ### 2. Observability
 
