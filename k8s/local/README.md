@@ -136,6 +136,37 @@ Finding (2026-11-05): on zangetsu, `swapoff -a` failed with `Cannot allocate mem
 
 Fix: reboot zangetsu. After the reboot (2026-11-05), `/proc/swaps` shows only the header on both nodes, zangetsu has 5.1 GiB available, and all Docker containers came back.
 
+#### 1.4 Container runtime (ADR 0002)
+
+Align containerd on both nodes and enable the CRI plugin, in one restart per node. Both nodes had different versions (2.3.3 and 2.2.6). After `sudo apt update`, the Docker repo has 2.4.2-3 for amd64 and arm64, so both nodes upgrade to it:
+
+```bash
+apt-cache madison containerd.io | head -6
+```
+
+Then, one node at a time:
+
+```bash
+sudo cp /etc/containerd/config.toml /etc/containerd/config.toml.bak
+sudo apt install -y -o Dpkg::Options::="--force-confold" containerd.io=2.4.2-3~debian.13~trixie
+sudo apt-mark hold containerd.io
+
+containerd config default | sudo tee /etc/containerd/config.toml >/dev/null
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+grep -nE 'SystemdCgroup|disabled_plugins' /etc/containerd/config.toml
+
+sudo systemctl restart containerd
+containerd --version
+sudo ctr plugins ls | grep -i cri
+docker ps --format '{{.Names}}\t{{.Status}}' | head
+```
+
+- `--force-confold` keeps Docker's config during the install; it is replaced right after with the full default, where CRI is enabled.
+- `apt-mark hold` stops an `apt upgrade` from changing the Kubernetes runtime by surprise.
+- Expected: `disabled_plugins = []`, `SystemdCgroup = true`, version 2.4.2, the three CRI plugins with status `ok`, Docker containers still up. A containerd restart does not stop running containers: each one has its own shim.
+
+urahara (2026-11-05): all as expected.
+
 ### 2. Observability
 
 Planned.
