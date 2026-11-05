@@ -170,6 +170,32 @@ urahara and zangetsu (2026-11-05): all as expected. Both nodes run containerd 2.
 
 Incident: rebooting zangetsu in step 1.3 restarted CrowdSec on urahara, which reads logs from Loki on zangetsu. Postmortem: [2026-11-05-crowdsec-restart-after-node-reboot](docs/postmortems/2026-11-05-crowdsec-restart-after-node-reboot.md).
 
+#### 1.5 kubeadm, kubelet and kubectl (ADR 0010)
+
+Add the Kubernetes apt repo for 1.36. The minor version is part of the URL, so apt only sees 1.36 packages. Run on both nodes.
+
+```bash
+sudo apt-get install -y apt-transport-https ca-certificates curl gpg
+sudo mkdir -p -m 755 /etc/apt/keyrings
+curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.36/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring.gpg] https://pkgs.k8s.io/core:/stable:/v1.36/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+apt-cache madison kubeadm | head -3
+```
+
+Both nodes (2026-11-05): latest patch is 1.36.6-1.1, so both install exactly that version and hold it:
+
+```bash
+sudo apt-get install -y kubelet=1.36.6-1.1 kubeadm=1.36.6-1.1 kubectl=1.36.6-1.1
+sudo apt-mark hold kubelet kubeadm kubectl
+sudo systemctl enable kubelet
+kubeadm version -o short
+kubectl version --client
+systemctl status kubelet --no-pager | head -5
+```
+
+Expected: version v1.36.6 for kubeadm and kubectl. kubelet restarts every few seconds (`activating (auto-restart)`): this is normal before `kubeadm init`, because it has no config yet.
+
 ### 2. Observability
 
 Planned.
