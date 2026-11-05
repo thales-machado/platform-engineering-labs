@@ -126,6 +126,8 @@ cat /proc/swaps
 
 Expected: the swap line in fstab starts with `#`, and `/proc/swaps` shows only the header.
 
+fstab may not be the only source. On urahara, systemd also activates the partition by its GPT type (`systemd-gpt-auto-generator`), so check what systemd loaded with `systemctl list-units --type=swap --all` and see step 1.13.
+
 zangetsu: zram created at boot by `rpi-swap` (Raspberry Pi OS on Debian 13), configured in `/etc/rpi/swap.conf`. Swap is turned off with a drop-in, which survives package updates.
 
 ```bash
@@ -441,6 +443,46 @@ The script is idempotent: if the rules already exist (like the temporary ones on
 Smoke test again after the unit (2026-11-05): ping `0% packet loss` both ways (about 0.3 ms), `nslookup` answers `10.96.0.1`. The pod network works across both nodes.
 
 Postmortem: [2026-11-05-pod-traffic-dropped-by-docker-forward](docs/postmortems/2026-11-05-pod-traffic-dropped-by-docker-forward.md).
+
+#### 1.13 Drill: reboot both nodes
+
+Everything above was applied at runtime. A reboot shows what is really persistent. One node at a time, worker first.
+
+zangetsu:
+
+```bash
+kubectl drain zangetsu --ignore-daemonsets --delete-emptydir-data   # on urahara
+sudo reboot                                                          # on zangetsu
+```
+
+After the boot, on the node:
+
+```bash
+cat /proc/swaps
+lsmod | grep -c br_netfilter
+sudo sysctl net.bridge.bridge-nf-call-iptables net.ipv4.ip_forward
+systemctl is-active containerd kubelet k8s-docker-user
+sudo nft list chain ip filter FORWARD | grep policy
+sudo nft list chain ip filter DOCKER-USER | grep -c 10.244.0.0/16
+```
+
+Then `kubectl uncordon zangetsu` on urahara. zangetsu (2026-11-05): all checks pass, node `Ready`. As expected, CrowdSec on urahara restarted while Loki was down (first postmortem).
+
+urahara (the only control plane, no drain): after the reboot, `kubectl` got `connection refused`. Swap was on again, and kubelet refused to start. Cause: `systemd-gpt-auto-generator` activates the swap partition by its GPT type, without fstab. Check what systemd loaded, and turn the generator off:
+
+```bash
+systemctl list-units --type=swap --all --no-pager
+sudo swapoff -a
+sudo systemctl mask dev-nvme0n1p3.swap
+sudo cp /etc/default/grub /etc/default/grub.bak
+sudo sed -i 's/^GRUB_CMDLINE_LINUX_DEFAULT="\(.*\)"/GRUB_CMDLINE_LINUX_DEFAULT="\1 systemd.gpt_auto=0"/' /etc/default/grub
+sudo update-grub
+sudo reboot
+```
+
+After the second reboot: no swap, `systemd.gpt_auto=0` in `/proc/cmdline`, both nodes `Ready`. Postmortem: [2026-11-05-swap-back-after-reboot](docs/postmortems/2026-11-05-swap-back-after-reboot.md).
+
+Note: right after boot, `k8s-docker-user` shows `inactive` until Docker starts (on urahara, about 2 minutes after boot), then `active (exited)`. That is expected: the unit is wanted by `docker.service`. After the reboot, urahara's `FORWARD` policy was `accept`, because the sysctl turns forwarding on before Docker starts; the `DOCKER-USER` rules were present anyway.
 
 ### 2. Observability
 
