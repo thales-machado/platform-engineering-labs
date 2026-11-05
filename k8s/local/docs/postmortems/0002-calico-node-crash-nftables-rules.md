@@ -1,5 +1,7 @@
-# 2026-11-05: calico-node crash loop on zangetsu (incompatible nftables rules)
+# PM-0002: calico-node crash loop on zangetsu (incompatible nftables rules)
 
+- ID: PM-0002
+- Date: 2026-11-05
 - Status: resolved
 - Severity: medium (one of two nodes had no working pod network; lab cluster only)
 - Found during: step 1.9 (Calico install)

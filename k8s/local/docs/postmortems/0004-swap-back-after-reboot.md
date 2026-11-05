@@ -1,5 +1,7 @@
-# 2026-11-05: Swap came back on urahara after reboot, kubelet down
+# PM-0004: Swap came back on urahara after reboot, kubelet down
 
+- ID: PM-0004
+- Date: 2026-11-05
 - Status: resolved
 - Severity: medium (control plane down after reboot; lab cluster only)
 - Found during: reboot drill after step 1.12

@@ -1,5 +1,7 @@
-# 2026-11-05: CrowdSec restarted on urahara after zangetsu reboot
+# PM-0001: CrowdSec restarted on urahara after zangetsu reboot
 
+- ID: PM-0001
+- Date: 2026-11-05
 - Status: resolved
 - Severity: low (homelab service, no data loss)
 - Found during: step 1.3 (swap off) and 1.4 (container runtime) checks

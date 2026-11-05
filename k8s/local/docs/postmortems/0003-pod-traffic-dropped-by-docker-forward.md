@@ -1,5 +1,7 @@
-# 2026-11-05: Pod traffic between nodes dropped by Docker's FORWARD policy
+# PM-0003: Pod traffic between nodes dropped by Docker's FORWARD policy
 
+- ID: PM-0003
+- Date: 2026-11-05
 - Status: resolved
 - Severity: medium (no pod traffic between nodes, no cluster DNS from zangetsu; lab cluster only)
 - Found during: step 1.11 (smoke test), right after the nftables switch (ADR 0011)

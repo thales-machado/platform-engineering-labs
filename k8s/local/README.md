@@ -172,7 +172,7 @@ docker ps --format '{{.Names}}\t{{.Status}}' | head
 
 urahara and zangetsu (2026-11-05): all as expected. Both nodes run containerd 2.4.2-3 with CRI enabled, held.
 
-Incident: rebooting zangetsu in step 1.3 restarted CrowdSec on urahara, which reads logs from Loki on zangetsu. Postmortem: [2026-11-05-crowdsec-restart-after-node-reboot](docs/postmortems/2026-11-05-crowdsec-restart-after-node-reboot.md).
+Incident: rebooting zangetsu in step 1.3 restarted CrowdSec on urahara, which reads logs from Loki on zangetsu. Postmortem: [PM-0001](docs/postmortems/0001-crowdsec-restart-after-node-reboot.md).
 
 #### 1.5 kubeadm, kubelet and kubectl (ADR 0010)
 
@@ -366,7 +366,7 @@ sudo nft list ruleset | grep -E 'chain KUBE-'
 
 Result (2026-11-05): urahara had no leftovers (kube-proxy cleaned up there, because iptables can read its `ip nat`). zangetsu had 19 chains in `ip nat`, 4 in `ip filter` and a few in the ip6 tables, all removed. Only `KUBE-FIREWALL`, `KUBE-KUBELET-CANARY` and `KUBE-IPTABLES-HINT` remain. All pods `Running`, Docker containers up on both nodes.
 
-Postmortem: [2026-11-05-calico-node-crash-nftables-rules](docs/postmortems/2026-11-05-calico-node-crash-nftables-rules.md).
+Postmortem: [PM-0002](docs/postmortems/0002-calico-node-crash-nftables-rules.md).
 
 #### 1.11 Smoke test: pod-to-pod across nodes and DNS
 
@@ -442,7 +442,7 @@ The script is idempotent: if the rules already exist (like the temporary ones on
 
 Smoke test again after the unit (2026-11-05): ping `0% packet loss` both ways (about 0.3 ms), `nslookup` answers `10.96.0.1`. The pod network works across both nodes.
 
-Postmortem: [2026-11-05-pod-traffic-dropped-by-docker-forward](docs/postmortems/2026-11-05-pod-traffic-dropped-by-docker-forward.md).
+Postmortem: [PM-0003](docs/postmortems/0003-pod-traffic-dropped-by-docker-forward.md).
 
 #### 1.13 Drill: reboot both nodes
 
@@ -466,7 +466,7 @@ sudo nft list chain ip filter FORWARD | grep policy
 sudo nft list chain ip filter DOCKER-USER | grep -c 10.244.0.0/16
 ```
 
-Then `kubectl uncordon zangetsu` on urahara. zangetsu (2026-11-05): all checks pass, node `Ready`. As expected, CrowdSec on urahara restarted while Loki was down (first postmortem).
+Then `kubectl uncordon zangetsu` on urahara. zangetsu (2026-11-05): all checks pass, node `Ready`. As expected, CrowdSec on urahara restarted while Loki was down (PM-0001).
 
 urahara (the only control plane, no drain): after the reboot, `kubectl` got `connection refused`. Swap was on again, and kubelet refused to start. Cause: `systemd-gpt-auto-generator` activates the swap partition by its GPT type, without fstab. Check what systemd loaded, and turn the generator off:
 
@@ -480,7 +480,7 @@ sudo update-grub
 sudo reboot
 ```
 
-After the second reboot: no swap, `systemd.gpt_auto=0` in `/proc/cmdline`, both nodes `Ready`. Postmortem: [2026-11-05-swap-back-after-reboot](docs/postmortems/2026-11-05-swap-back-after-reboot.md).
+After the second reboot: no swap, `systemd.gpt_auto=0` in `/proc/cmdline`, both nodes `Ready`. Postmortem: [PM-0004](docs/postmortems/0004-swap-back-after-reboot.md).
 
 Note: right after boot, `k8s-docker-user` shows `inactive` until Docker starts (on urahara, about 2 minutes after boot), then `active (exited)`. That is expected: the unit is wanted by `docker.service`. After the reboot, urahara's `FORWARD` policy was `accept`, because the sysctl turns forwarding on before Docker starts; the `DOCKER-USER` rules were present anyway.
 
@@ -501,6 +501,15 @@ Planned.
 ### 5. CNI migration: Calico to Cilium
 
 Planned.
+
+## Postmortems
+
+| ID | Date | Title | Severity |
+|---|---|---|---|
+| [PM-0001](docs/postmortems/0001-crowdsec-restart-after-node-reboot.md) | 2026-11-05 | CrowdSec restarted on urahara after zangetsu reboot | low |
+| [PM-0002](docs/postmortems/0002-calico-node-crash-nftables-rules.md) | 2026-11-05 | calico-node crash loop on zangetsu (incompatible nftables rules) | medium |
+| [PM-0003](docs/postmortems/0003-pod-traffic-dropped-by-docker-forward.md) | 2026-11-05 | Pod traffic between nodes dropped by Docker's FORWARD policy | medium |
+| [PM-0004](docs/postmortems/0004-swap-back-after-reboot.md) | 2026-11-05 | Swap came back on urahara after reboot, kubelet down | medium |
 
 ## Teardown
 
