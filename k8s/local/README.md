@@ -50,6 +50,7 @@ Architecture drawn before any install. Reviewed and approved on 2026-11-05. Deci
 | [0010](docs/adr/0010-install-1-36-then-upgrade.md) | Install Kubernetes 1.36, then upgrade to 1.37 (added in step 1) |
 | [0011](docs/adr/0011-nftables-dataplane.md) | nftables data plane for kube-proxy and Calico (added in step 1) |
 | [0012](docs/adr/0012-docker-user-accept-pod-cidr.md) | Accept pod traffic in Docker's DOCKER-USER chain (added in step 1) |
+| [0013](docs/adr/0013-urahara-announces-lb-ips.md) | urahara can announce LoadBalancer IPs (added in step 1) |
 
 ### 1. Cluster and workloads
 
@@ -536,6 +537,44 @@ Both speakers `1/1 Running`. This patch differs from the upstream manifest: re-a
 
 Lesson: every `hostNetwork` component needs a port check on every node before install. Ports used by MetalLB on the nodes: 7946 TCP/UDP (memberlist), 7472 (metrics), 17472 (health probe, localhost).
 
+#### 1.15 LoadBalancer test and failover drill
+
+A test Service with `type: LoadBalancer`:
+
+```bash
+kubectl create deployment lb-test --image=nginx:alpine --replicas=2
+kubectl expose deployment lb-test --type=LoadBalancer --port=80
+kubectl rollout status deployment/lb-test
+kubectl get pods -l app=lb-test -o wide
+kubectl get svc lb-test
+kubectl get servicel2statuses -n metallb-system
+curl -sI http://<FIRST_POOL_IP> | head -1
+```
+
+Result (2026-11-05): `EXTERNAL-IP` is the first IP of the pool, one nginx pod per node, `HTTP/1.1 200 OK`. zangetsu announces the IP.
+
+Failover drill: a request loop on a PC on the LAN (PowerShell), then reboot the node that announces the IP.
+
+```powershell
+while ($true) { try { $r = Invoke-WebRequest http://<FIRST_POOL_IP> -TimeoutSec 2 -UseBasicParsing; "$(Get-Date -f HH:mm:ss) $($r.StatusCode)" } catch { "$(Get-Date -f HH:mm:ss) FAIL" }; Start-Sleep 1 }
+```
+
+```bash
+kubectl drain zangetsu --ignore-daemonsets --delete-emptydir-data    # on urahara
+sudo reboot                                                           # on zangetsu
+kubectl get servicel2statuses -n metallb-system                       # on urahara, during the reboot
+kubectl uncordon zangetsu                                             # on urahara, after the boot
+```
+
+First run: about 75 seconds of failed requests, and the IP never moved to urahara. kubeadm labels the control plane with `node.kubernetes.io/exclude-from-external-load-balancers`, and MetalLB does not announce from it (PM-0005). Fix (ADR 0013):
+
+```bash
+kubectl get node urahara --show-labels | tr ',' '\n' | grep exclude
+kubectl label node urahara node.kubernetes.io/exclude-from-external-load-balancers-
+```
+
+Second run: urahara takes over the IP during the reboot, no failed requests.
+
 ### 2. Observability
 
 Planned.
@@ -560,6 +599,7 @@ Planned.
 | [PM-0002](docs/postmortems/0002-calico-node-crash-nftables-rules.md) | 2026-11-05 | calico-node crash loop on zangetsu (incompatible nftables rules) | medium |
 | [PM-0003](docs/postmortems/0003-pod-traffic-dropped-by-docker-forward.md) | 2026-11-05 | Pod traffic between nodes dropped by Docker's FORWARD policy | medium |
 | [PM-0004](docs/postmortems/0004-swap-back-after-reboot.md) | 2026-11-05 | Swap came back on urahara after reboot, kubelet down | medium |
+| [PM-0005](docs/postmortems/0005-no-lb-failover-control-plane-excluded.md) | 2026-11-05 | No LoadBalancer failover when zangetsu rebooted | medium |
 
 ## Teardown
 
