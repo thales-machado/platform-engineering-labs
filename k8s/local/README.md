@@ -683,6 +683,48 @@ Result: no PVs left and the directory is empty. Deleting the PVC deletes the dat
 
 The test LoadBalancer (`lb-test`) was removed too, which frees the first pool IP for the ingress controller.
 
+#### 1.17 Traefik: Ingress and Gateway API (ADR 0008)
+
+Lab DNS: a wildcard `*.lab.thalespm.me` pointing to the first MetalLB IP, set in the LAN's Pi-hole (`address=/lab.thalespm.me/<TRAEFIK_IP>` in `misc.dnsmasq_lines`). Check from any LAN client:
+
+```bash
+nslookup whoami.lab.thalespm.me
+```
+
+Helm, from the official apt repo:
+
+```bash
+curl -fsSL https://packages.buildkite.com/helm-linux/helm-debian/gpgkey | gpg --dearmor | sudo tee /usr/share/keyrings/helm.gpg >/dev/null
+echo "deb [signed-by=/usr/share/keyrings/helm.gpg] https://packages.buildkite.com/helm-linux/helm-debian/any/ any main" | sudo tee /etc/apt/sources.list.d/helm-stable-debian.list
+sudo apt-get update && sudo apt-get install -y helm
+helm version
+helm repo add traefik https://traefik.github.io/charts
+helm repo update
+helm show chart traefik/traefik | grep -E '^(version|appVersion)'
+```
+
+Result (2026-11-06): Helm v4.3.0; chart `42.3.1`, Traefik `v3.7.17`.
+
+The first `helm install` failed with `no matches for kind "GatewayClass"`: the chart does not ship the Gateway API CRDs anymore. They are cluster-wide and shared by every controller, so they are installed once, on their own (standard channel, server-side apply because the CRDs are too large for the client-side annotation):
+
+```bash
+GWTAG=$(curl -s https://api.github.com/repos/kubernetes-sigs/gateway-api/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4); echo "$GWTAG"
+kubectl apply --server-side -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/${GWTAG}/standard-install.yaml"
+kubectl get crd | grep gateway.networking.k8s.io
+```
+
+Then Traefik with [manifests/traefik-values.yaml](manifests/traefik-values.yaml) (fixed MetalLB IP, Ingress and Gateway API providers, default IngressClass, no chart-managed Gateway):
+
+```bash
+helm install traefik traefik/traefik -n traefik --create-namespace -f traefik-values.yaml
+kubectl -n traefik rollout status deployment/traefik
+kubectl -n traefik get pods,svc -o wide
+kubectl get gatewayclass
+curl -s -o /dev/null -w '%{http_code}\n' http://whoami.lab.thalespm.me
+```
+
+Result: Service `traefik` with the fixed IP on ports 80 and 443; GatewayClass `traefik` `ACCEPTED True`; `curl` returns `404` (Traefik answers, no route yet).
+
 ### 2. Observability
 
 Planned.
