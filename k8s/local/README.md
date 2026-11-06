@@ -52,6 +52,7 @@ Architecture drawn before any install. Reviewed and approved on 2026-11-05. Deci
 | [0012](docs/adr/0012-docker-user-accept-pod-cidr.md) | Accept pod traffic in Docker's DOCKER-USER chain (added in step 1) |
 | [0013](docs/adr/0013-urahara-announces-lb-ips.md) | urahara can announce LoadBalancer IPs (added in step 1) |
 | [0014](docs/adr/0014-cert-manager-wildcard-dns01.md) | cert-manager with a Let's Encrypt wildcard certificate (DNS-01) (added in step 1) |
+| [0015](docs/adr/0015-kubelet-serving-certificates.md) | Kubelet serving certificates from the cluster CA (added in step 1) |
 
 ### 1. Cluster and workloads
 
@@ -800,6 +801,32 @@ echo | openssl s_client -connect <TRAEFIK_IP>:443 -servername whoami-gw.lab.thal
 ```
 
 Result (2026-11-06): both hostnames answer over HTTPS without `-k`. Certificate issuer `Let's Encrypt, CN=YR2` (production), subject `lab.thalespm.me`, valid until 2027-02-04. The Ingress and the Gateway both serve the wildcard. Decision record: ADR 0014.
+
+#### 1.19 Kubelet serving certificates (ADR 0015)
+
+metrics-server needs to verify each kubelet's certificate. kubeadm kubelets serve a self-signed one, so they request a certificate from the cluster CA instead.
+
+Cluster-wide config, for nodes that join or upgrade later: in `kubectl -n kube-system edit configmap kubelet-config`, add `serverTLSBootstrap: true` right below `kind: KubeletConfiguration` (same indentation).
+
+Each node's kubelet, on both nodes:
+
+```bash
+grep -q '^serverTLSBootstrap' /var/lib/kubelet/config.yaml || echo 'serverTLSBootstrap: true' | sudo tee -a /var/lib/kubelet/config.yaml
+sudo systemctl restart kubelet
+systemctl is-active kubelet
+```
+
+Approve the CSRs, after checking that the requestor is `system:node:<node>`:
+
+```bash
+kubectl get csr
+kubectl certificate approve <csr-name> ...
+echo | openssl s_client -connect <NODE_IP>:10250 2>/dev/null | openssl x509 -noout -issuer -subject
+```
+
+Result (2026-11-06): one CSR per kubelet restart (urahara had two, both harmless), all `Approved,Issued`. The first check showed zangetsu still self-signed (`issuer=CN=zangetsu-ca@...`): its kubelet had not been restarted with the new line. After the restart and approval, both nodes serve `issuer=CN=kubernetes`, `subject=O=system:nodes, CN=system:node:<node>`.
+
+Approved CSR objects are cleaned up by the controller manager after about an hour. Deleting one (`kubectl delete csr <name>`) only removes the request object; the certificate already on the node stays valid.
 
 ### 2. Observability
 
