@@ -1,0 +1,6 @@
+apiVersion: v2
+name: lab-app
+description: Demo web app for the k8s/local lab (podinfo image), written by hand to practice Helm.
+type: application
+version: 0.1.0
+appVersion: "6.17.0"

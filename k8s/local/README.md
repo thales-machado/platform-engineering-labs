@@ -843,6 +843,22 @@ kubectl top pods -A --sort-by=memory | head -10
 
 Result (2026-11-06): metrics-server `v0.9.1`, no TLS errors in its log. `kubectl top nodes`: urahara 4% CPU / 39% memory, zangetsu 29% CPU / 49% memory. The Raspberry Pi already runs at about half its memory with the homelab services, which supports keeping heavy workloads on urahara. The biggest pod is kube-apiserver (about 1 GiB).
 
+#### 1.21 First app with Helm: our own chart
+
+A chart written by hand, [charts/lab-app](charts/lab-app), for the podinfo image (`ghcr.io/stefanprodan/podinfo`, amd64 and arm64). It covers the workload topics of the CKA in one place:
+
+| Template | What it practices |
+|---|---|
+| `configmap.yaml` | Non-secret settings, read as env vars (`envFrom`) |
+| `secret.yaml` | A secret value, read with `secretKeyRef`; the real value comes from `--set`, never from Git |
+| `deployment.yaml` | Liveness and readiness probes, requests and limits, non-root security context, read-only root filesystem, topology spread across nodes, checksum annotations that roll the pods when the ConfigMap or Secret changes |
+| `service.yaml` | ClusterIP Service on port 80 |
+| `httproute.yaml` | Route through the shared Gateway, HTTP and HTTPS |
+| `hpa.yaml` | HorizontalPodAutoscaler on CPU (percent of the request), 2 to 6 replicas |
+| `pdb.yaml` | PodDisruptionBudget, at least 1 pod during a drain |
+
+The Deployment has no `replicas` when the HPA is on: the HPA owns the replica count, and a fixed number would fight it on every `helm upgrade`.
+
 ### 2. Observability
 
 Planned.

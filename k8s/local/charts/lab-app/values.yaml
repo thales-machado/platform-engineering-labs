@@ -1,0 +1,42 @@
+replicaCount: 2
+
+image:
+  repository: ghcr.io/stefanprodan/podinfo
+  # Empty means Chart.appVersion. Multi-arch (amd64 and arm64).
+  tag: ""
+  pullPolicy: IfNotPresent
+
+# Non-secret settings, rendered into a ConfigMap and read as env vars.
+ui:
+  message: "Hello from the k8s/local lab"
+  color: "#2f6f73"
+
+# Demo secret, rendered into a Secret and read as an env var. Never commit a real value:
+# override at install time with --set secret.apiToken=...
+secret:
+  apiToken: "change-me"
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 32Mi
+  limits:
+    memory: 128Mi
+
+# Exposed through the shared Gateway (manifests/whoami.yaml), HTTP and HTTPS listeners.
+route:
+  enabled: true
+  hostname: app.lab.thalespm.me
+  gateway:
+    name: lab-gateway
+    namespace: traefik
+
+autoscaling:
+  enabled: true
+  minReplicas: 2
+  maxReplicas: 6
+  targetCPUUtilizationPercentage: 60
+
+podDisruptionBudget:
+  enabled: true
+  minAvailable: 1

@@ -1,0 +1,5 @@
+{{ include "lab-app.fullname" . }} is installed in namespace {{ .Release.Namespace }}.
+{{- if .Values.route.enabled }}
+URL: https://{{ .Values.route.hostname }}
+{{- end }}
+Check: kubectl -n {{ .Release.Namespace }} get deploy,pods,svc,hpa,pdb -l app.kubernetes.io/instance={{ .Release.Name }}

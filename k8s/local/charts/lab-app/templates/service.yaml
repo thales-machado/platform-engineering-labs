@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lab-app.fullname" . }}
+  labels:
+    {{- include "lab-app.labels" . | nindent 4 }}
+spec:
+  selector:
+    {{- include "lab-app.selectorLabels" . | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
