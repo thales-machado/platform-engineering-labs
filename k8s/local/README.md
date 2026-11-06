@@ -892,6 +892,25 @@ kubectl -n lab-app get hpa -w
 
 Result (2026-11-06): under load the HPA scaled to the maximum, 6 replicas. After the load pod was deleted, the reported CPU still rose for about a minute (117%, then 297%) before falling to 2%: metrics-server reports averages over its last scrape window, so the HPA sees the past, not the present. The replicas stayed at 6 for 5 minutes (the default scale-down stabilization window), then dropped to 5 and right after to 2 (the default scale-down policy allows removing up to 100% of the extra pods every 15 seconds).
 
+Upgrade and rollback:
+
+```bash
+cd ~/platform-engineering-labs/k8s/local/charts/lab-app
+helm upgrade lab-app . -n lab-app --reuse-values --set ui.message="Upgraded with Helm" --set ui.color="#6f2f4a"
+kubectl -n lab-app rollout status deployment/lab-app
+helm history lab-app -n lab-app
+curl -s https://app.lab.thalespm.me | grep -E '"message"|"color"'
+
+helm rollback lab-app 1 -n lab-app
+kubectl -n lab-app rollout status deployment/lab-app
+helm history lab-app -n lab-app
+curl -s https://app.lab.thalespm.me | grep -E '"message"|"color"'
+```
+
+Result (2026-11-06): the upgrade only changed the ConfigMap, and the `checksum/config` annotation rolled the pods (revision 2). The rollback created revision 3, "Rollback to 1", with the original message: history is never rewritten.
+
+Finding: the first `curl` right after `rollout status` returned the old message; a second `curl` returned the new one. `rollout status` reports done when the new pods are ready, but an old pod can still receive traffic for a few seconds while it terminates, until Traefik sees the updated endpoints. In production this shows up as old responses or 502s during deploys. The usual fix is a `preStop` sleep so the pod keeps serving until the endpoint change has propagated.
+
 ### 2. Observability
 
 Planned.
