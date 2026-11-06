@@ -828,6 +828,21 @@ Result (2026-11-06): one CSR per kubelet restart (urahara had two, both harmless
 
 Approved CSR objects are cleaned up by the controller manager after about an hour. Deleting one (`kubectl delete csr <name>`) only removes the request object; the certificate already on the node stays valid.
 
+#### 1.20 metrics-server
+
+Official manifest, without `--kubelet-insecure-tls` (the kubelets serve certificates from the cluster CA, step 1.19):
+
+```bash
+kubectl apply -f https://github.com/kubernetes-sigs/metrics-server/releases/latest/download/components.yaml
+kubectl -n kube-system rollout status deployment/metrics-server
+kubectl -n kube-system get deployment metrics-server -o jsonpath='{.spec.template.spec.containers[0].image}{"\n"}'
+sleep 30
+kubectl top nodes
+kubectl top pods -A --sort-by=memory | head -10
+```
+
+Result (2026-11-06): metrics-server `v0.9.1`, no TLS errors in its log. `kubectl top nodes`: urahara 4% CPU / 39% memory, zangetsu 29% CPU / 49% memory. The Raspberry Pi already runs at about half its memory with the homelab services, which supports keeping heavy workloads on urahara. The biggest pod is kube-apiserver (about 1 GiB).
+
 ### 2. Observability
 
 Planned.
