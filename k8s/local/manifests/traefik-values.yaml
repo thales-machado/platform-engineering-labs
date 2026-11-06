@@ -15,3 +15,9 @@ gateway:
 ingressClass:
   enabled: true
   isDefaultClass: true
+# Default certificate for every HTTPS router without its own TLS secret
+# (the Ingresses): the lab wildcard issued by cert-manager (step 1.18).
+tlsStore:
+  default:
+    defaultCertificate:
+      secretName: lab-wildcard-tls

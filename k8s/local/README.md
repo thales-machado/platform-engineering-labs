@@ -771,6 +771,18 @@ unset CF_TOKEN
 kubectl -n cert-manager get secret cloudflare-api-token
 ```
 
+ClusterIssuers for Let's Encrypt staging and production, from [manifests/cluster-issuers.yaml](manifests/cluster-issuers.yaml) (with the account email filled in), then the wildcard certificate, staging first to avoid production rate limits:
+
+```bash
+kubectl apply -f cluster-issuers.yaml
+kubectl get clusterissuer
+kubectl apply -f lab-wildcard-certificate.yaml     # with issuerRef letsencrypt-staging
+kubectl -n traefik get certificate lab-wildcard -w
+kubectl get challenges -A
+```
+
+Result (2026-11-06): both issuers `READY True`. The staging certificate for `lab.thalespm.me` and `*.lab.thalespm.me` was issued in 2m43s through a DNS-01 challenge in Cloudflare. The challenge resources are deleted after success, so `get challenges` is empty afterwards. Valid 90 days, renewal planned 30 days before expiry.
+
 ### 2. Observability
 
 Planned.

@@ -9,7 +9,7 @@ metadata:
 spec:
   secretName: lab-wildcard-tls
   issuerRef:
-    name: letsencrypt-staging
+    name: letsencrypt-prod
     kind: ClusterIssuer
   dnsNames:
     - lab.thalespm.me
