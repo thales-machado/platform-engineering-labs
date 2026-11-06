@@ -763,7 +763,7 @@ kubectl -n cert-manager get pods -o wide
 
 Result (2026-11-06): cert-manager `v1.21.3`; controller, cainjector and webhook `Running`.
 
-Cloudflare API token as a Secret, read without echo and kept out of shell history and Git. A dedicated token for the lab: Zone DNS Edit and Zone Read, only for the `thalespm.me` zone.
+Cloudflare API token as a Secret, read without echo and kept out of shell history and Git. The lab reuses the homelab's DNS token for now. Better practice: a dedicated token for the lab (Zone DNS Edit and Zone Read, only the `thalespm.me` zone), so it can be revoked without touching the homelab.
 
 ```bash
 read -rsp 'Cloudflare token: ' CF_TOKEN; echo

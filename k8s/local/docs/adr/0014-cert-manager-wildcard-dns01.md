@@ -21,5 +21,5 @@ cert-manager, ClusterIssuers for Let's Encrypt staging and production with the C
 
 - One certificate for every lab hostname; cert-manager renews it 30 days before expiry.
 - The DNS-01 self-check must use public resolvers (`--dns01-recursive-nameservers-only`, 1.1.1.1 and 8.8.8.8): the LAN's Pi-hole answers everything under `lab.thalespm.me` locally and never returns the TXT record.
-- A Cloudflare API token lives in the cluster as a Secret, created by hand and never committed. Scope: DNS Edit and Zone Read on `thalespm.me` only.
+- A Cloudflare API token lives in the cluster as a Secret, created by hand and never committed. For now it is the homelab's DNS token. Follow-up: a dedicated token for the lab (DNS Edit and Zone Read on `thalespm.me` only), so the lab and the homelab can be revoked separately.
 - New certificates are tested on staging first; production has rate limits.
