@@ -51,6 +51,7 @@ Architecture drawn before any install. Reviewed and approved on 2026-11-05. Deci
 | [0011](docs/adr/0011-nftables-dataplane.md) | nftables data plane for kube-proxy and Calico (added in step 1) |
 | [0012](docs/adr/0012-docker-user-accept-pod-cidr.md) | Accept pod traffic in Docker's DOCKER-USER chain (added in step 1) |
 | [0013](docs/adr/0013-urahara-announces-lb-ips.md) | urahara can announce LoadBalancer IPs (added in step 1) |
+| [0014](docs/adr/0014-cert-manager-wildcard-dns01.md) | cert-manager with a Let's Encrypt wildcard certificate (DNS-01) (added in step 1) |
 
 ### 1. Cluster and workloads
 
@@ -782,6 +783,23 @@ kubectl get challenges -A
 ```
 
 Result (2026-11-06): both issuers `READY True`. The staging certificate for `lab.thalespm.me` and `*.lab.thalespm.me` was issued in 2m43s through a DNS-01 challenge in Cloudflare. The challenge resources are deleted after success, so `get challenges` is empty afterwards. Valid 90 days, renewal planned 30 days before expiry.
+
+Switch to production, make the wildcard Traefik's default certificate, and add an HTTPS listener to the Gateway (port 8443, the `websecure` entry point). The HTTPRoute has no `sectionName`, so it attaches to both listeners.
+
+```bash
+kubectl apply -f lab-wildcard-certificate.yaml     # issuerRef letsencrypt-prod
+kubectl -n traefik get certificate lab-wildcard -w
+helm upgrade traefik traefik/traefik -n traefik -f traefik-values.yaml   # with tlsStore.default
+kubectl -n traefik rollout status deployment/traefik
+kubectl apply -f whoami.yaml                       # Gateway with the HTTPS listener
+kubectl -n traefik get gateway lab-gateway
+
+curl -s https://whoami.lab.thalespm.me | head -1
+curl -s https://whoami-gw.lab.thalespm.me | head -1
+echo | openssl s_client -connect <TRAEFIK_IP>:443 -servername whoami-gw.lab.thalespm.me 2>/dev/null | openssl x509 -noout -issuer -subject -enddate
+```
+
+Result (2026-11-06): both hostnames answer over HTTPS without `-k`. Certificate issuer `Let's Encrypt, CN=YR2` (production), subject `lab.thalespm.me`, valid until 2027-02-04. The Ingress and the Gateway both serve the wildcard. Decision record: ADR 0014.
 
 ### 2. Observability
 
