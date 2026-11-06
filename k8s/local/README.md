@@ -669,6 +669,20 @@ kubectl logs pv-reader
 
 Result (2026-11-06): the PV has node affinity `kubernetes.io/hostname in [urahara]` and is a `HostPath` directory under `/opt/local-path-provisioner/`. The host sees the same file. `pv-reader` was scheduled on urahara without any node selector (the scheduler follows the PV's node affinity) and printed the same date as the writer. The data survived the pod.
 
+Cleanup, and the `Delete` reclaim policy at work:
+
+```bash
+kubectl delete pod pv-reader
+kubectl delete pvc pv-test
+sleep 15
+kubectl get pv
+sudo ls /opt/local-path-provisioner/
+```
+
+Result: no PVs left and the directory is empty. Deleting the PVC deletes the data on disk. Database safety comes from replicas and backups (ADR 0006, ADR 0009), never from keeping a PVC.
+
+The test LoadBalancer (`lb-test`) was removed too, which frees the first pool IP for the ingress controller.
+
 ### 2. Observability
 
 Planned.
