@@ -725,6 +725,30 @@ curl -s -o /dev/null -w '%{http_code}\n' http://whoami.lab.thalespm.me
 
 Result: Service `traefik` with the fixed IP on ports 80 and 443; GatewayClass `traefik` `ACCEPTED True`; `curl` returns `404` (Traefik answers, no route yet).
 
+Gateway API version installed: `v1.7.0` (newer than the `v1.6.1` the chart notes mention; the `v1` API is backward compatible, and the Gateway below is `PROGRAMMED`).
+
+```bash
+kubectl get crd gateways.gateway.networking.k8s.io -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}{"\n"}'
+```
+
+Test app [manifests/whoami.yaml](manifests/whoami.yaml): the same Service exposed with an Ingress (`whoami.lab.thalespm.me`) and with a Gateway and HTTPRoute (`whoami-gw.lab.thalespm.me`). Applied straight from this repo:
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/thales-machado/platform-engineering-labs/main/k8s/local/manifests/whoami.yaml
+kubectl -n whoami rollout status deployment/whoami
+kubectl -n whoami get pods -o wide
+kubectl -n whoami get ingress,httproute
+kubectl -n traefik get gateway lab-gateway
+curl -s http://whoami.lab.thalespm.me | head -6
+curl -s http://whoami-gw.lab.thalespm.me | head -6
+```
+
+Result (2026-11-06): one whoami pod per node; Ingress and Gateway both on the Traefik IP; Gateway `PROGRAMMED True`; both hostnames answer over HTTP.
+
+In the browser, `whoami.lab.thalespm.me` works but `whoami-gw.lab.thalespm.me` returns `404`. The browser upgrades to HTTPS (the whoami headers show `X-Forwarded-Proto: https`, port 443). An Ingress without TLS settings is served by every Traefik entry point, including `websecure` (443, Traefik's default self-signed certificate). An HTTPRoute is attached only to the listeners of its Gateway, and `lab-gateway` has only the HTTP listener (8000). So HTTPS requests to the Gateway hostname have no route. The fix is a real certificate and an HTTPS listener (next part).
+
+Also visible in the headers: `X-Forwarded-For` / `X-Real-Ip` is the node IP, not the client's. With `externalTrafficPolicy: Cluster`, kube-proxy SNATs traffic that enters on one node and goes to a pod on another. Keeping the client IP needs `externalTrafficPolicy: Local`, which makes MetalLB announce only from nodes running a Traefik pod.
+
 ### 2. Observability
 
 Planned.
