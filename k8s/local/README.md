@@ -876,6 +876,22 @@ curl -s https://app.lab.thalespm.me | head -5
 
 Result (2026-11-06): the release installs; the Deployment starts with 1 pod and the HPA (`<unknown>` CPU for the first minute) takes it to 2. A `curl` in the first second returns Traefik's `no available server`: the route exists, but no pod is ready yet, so the readiness probe keeps it out of the Service. A few seconds later `https://app.lab.thalespm.me` shows the podinfo page with the message from the ConfigMap. The security context (non-root UID 1000, read-only root filesystem) works with the podinfo image.
 
+HPA under load: a busybox pod with 20 loops calling the Service from inside the cluster, then the scale-down.
+
+```bash
+kubectl -n lab-app get hpa,pods -o wide
+kubectl -n lab-app run load --image=busybox:1.36 --restart=Never -- /bin/sh -c 'for i in $(seq 1 20); do (while true; do wget -q -O- http://lab-app/ >/dev/null 2>&1; done) & done; wait'
+kubectl -n lab-app get hpa -w
+kubectl -n lab-app get pods -o wide
+kubectl top pods -n lab-app
+kubectl -n lab-app describe hpa lab-app | tail -10
+
+kubectl -n lab-app delete pod load
+kubectl -n lab-app get hpa -w
+```
+
+Result (2026-11-06): under load the HPA scaled to the maximum, 6 replicas. After the load pod was deleted, the reported CPU still rose for about a minute (117%, then 297%) before falling to 2%: metrics-server reports averages over its last scrape window, so the HPA sees the past, not the present. The replicas stayed at 6 for 5 minutes (the default scale-down stabilization window), then dropped to 5 and right after to 2 (the default scale-down policy allows removing up to 100% of the extra pods every 15 seconds).
+
 ### 2. Observability
 
 Planned.
