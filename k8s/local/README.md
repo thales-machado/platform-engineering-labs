@@ -749,6 +749,28 @@ In the browser, `whoami.lab.thalespm.me` works but `whoami-gw.lab.thalespm.me` r
 
 Also visible in the headers: `X-Forwarded-For` / `X-Real-Ip` is the node IP, not the client's. With `externalTrafficPolicy: Cluster`, kube-proxy SNATs traffic that enters on one node and goes to a pod on another. Keeping the client IP needs `externalTrafficPolicy: Local`, which makes MetalLB announce only from nodes running a Traefik pod.
 
+#### 1.18 HTTPS: cert-manager and a wildcard certificate
+
+cert-manager with [manifests/cert-manager-values.yaml](manifests/cert-manager-values.yaml). The DNS-01 self-check uses public resolvers: the LAN's Pi-hole answers everything under `lab.thalespm.me` locally, so it would never return the `_acme-challenge` TXT record from Cloudflare.
+
+```bash
+helm show chart oci://quay.io/jetstack/charts/cert-manager | grep -E '^(version|appVersion)'
+helm install cert-manager oci://quay.io/jetstack/charts/cert-manager -n cert-manager --create-namespace -f cert-manager-values.yaml
+kubectl -n cert-manager rollout status deployment/cert-manager-webhook
+kubectl -n cert-manager get pods -o wide
+```
+
+Result (2026-11-06): cert-manager `v1.21.3`; controller, cainjector and webhook `Running`.
+
+Cloudflare API token as a Secret, read without echo and kept out of shell history and Git. A dedicated token for the lab: Zone DNS Edit and Zone Read, only for the `thalespm.me` zone.
+
+```bash
+read -rsp 'Cloudflare token: ' CF_TOKEN; echo
+kubectl -n cert-manager create secret generic cloudflare-api-token --from-literal=api-token="$CF_TOKEN"
+unset CF_TOKEN
+kubectl -n cert-manager get secret cloudflare-api-token
+```
+
 ### 2. Observability
 
 Planned.

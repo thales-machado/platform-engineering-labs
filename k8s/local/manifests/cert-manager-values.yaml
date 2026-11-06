@@ -1,0 +1,9 @@
+# cert-manager Helm values. Chart oci://quay.io/jetstack/charts/cert-manager v1.21.3.
+crds:
+  enabled: true
+# The DNS-01 self-check must ask public resolvers. The LAN DNS (Pi-hole) answers
+# everything under lab.thalespm.me locally (wildcard address= line), so it never
+# returns the _acme-challenge TXT record published in Cloudflare.
+extraArgs:
+  - --dns01-recursive-nameservers-only
+  - --dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53
