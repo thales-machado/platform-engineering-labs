@@ -859,6 +859,23 @@ A chart written by hand, [charts/lab-app](charts/lab-app), for the podinfo image
 
 The Deployment has no `replicas` when the HPA is on: the HPA owns the replica count, and a fixed number would fight it on every `helm upgrade`.
 
+Install from a clone of this repo. Read the rendered YAML before touching the cluster, and pass the secret value without echo:
+
+```bash
+git clone https://github.com/thales-machado/platform-engineering-labs.git ~/platform-engineering-labs
+cd ~/platform-engineering-labs/k8s/local/charts/lab-app
+helm lint .
+helm template lab-app . -n lab-app | less
+
+read -rsp 'Demo API token: ' APP_TOKEN; echo
+helm install lab-app . -n lab-app --create-namespace --set secret.apiToken="$APP_TOKEN"
+unset APP_TOKEN
+kubectl -n lab-app get deploy,pods,svc,hpa,pdb,httproute -o wide
+curl -s https://app.lab.thalespm.me | head -5
+```
+
+Result (2026-11-06): the release installs; the Deployment starts with 1 pod and the HPA (`<unknown>` CPU for the first minute) takes it to 2. A `curl` in the first second returns Traefik's `no available server`: the route exists, but no pod is ready yet, so the readiness probe keeps it out of the Service. A few seconds later `https://app.lab.thalespm.me` shows the podinfo page with the message from the ConfigMap. The security context (non-root UID 1000, read-only root filesystem) works with the podinfo image.
+
 ### 2. Observability
 
 Planned.
