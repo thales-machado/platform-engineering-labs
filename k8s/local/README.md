@@ -637,6 +637,38 @@ kubectl exec pv-writer -- cat /data/hello.txt
 
 Result: PVC `Bound` (100Mi, `local-path`), pod `Running` on urahara, the file has the date.
 
+Persistence test: delete the pod and read the file from a new pod. A new reader pod, not the writer again, because the writer would overwrite the file.
+
+```bash
+kubectl describe pv "$(kubectl get pvc pv-test -o jsonpath='{.spec.volumeName}')" | grep -E -A4 'Node Affinity|Source'
+sudo cat /opt/local-path-provisioner/*pv-test*/hello.txt
+
+kubectl delete pod pv-writer
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pv-reader
+spec:
+  containers:
+    - name: reader
+      image: busybox:1.36
+      command: ["sh", "-c", "cat /data/hello.txt && sleep 3600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: pv-test
+EOF
+kubectl wait --for=condition=Ready pod/pv-reader --timeout=120s
+kubectl get pod pv-reader -o wide
+kubectl logs pv-reader
+```
+
+Result (2026-11-06): the PV has node affinity `kubernetes.io/hostname in [urahara]` and is a `HostPath` directory under `/opt/local-path-provisioner/`. The host sees the same file. `pv-reader` was scheduled on urahara without any node selector (the scheduler follows the PV's node affinity) and printed the same date as the writer. The data survived the pod.
+
 ### 2. Observability
 
 Planned.
