@@ -575,6 +575,68 @@ kubectl label node urahara node.kubernetes.io/exclude-from-external-load-balance
 
 Second run: urahara takes over the IP during the reboot, no failed requests.
 
+#### 1.16 Storage: local-path-provisioner (ADR 0006)
+
+Preflight on both nodes: free space on `/opt`, and the default volume directory does not exist yet.
+
+```bash
+df -h /opt
+ls -ld /opt/local-path-provisioner 2>&1
+```
+
+Result (2026-11-06): 753 GB free on urahara, 355 GB on zangetsu; the directory does not exist on either node.
+
+Install the latest release and make it the default StorageClass:
+
+```bash
+TAG=$(curl -s https://api.github.com/repos/rancher/local-path-provisioner/releases/latest | grep -m1 '"tag_name"' | cut -d'"' -f4); echo "$TAG"
+kubectl apply -f "https://raw.githubusercontent.com/rancher/local-path-provisioner/${TAG}/deploy/local-path-storage.yaml"
+kubectl -n local-path-storage rollout status deployment/local-path-provisioner
+kubectl patch storageclass local-path -p '{"metadata":{"annotations":{"storageclass.kubernetes.io/is-default-class":"true"}}}'
+kubectl get storageclass
+```
+
+Result: `v0.0.37`; `local-path (default)`, reclaim policy `Delete`, binding mode `WaitForFirstConsumer`, no volume expansion.
+
+Test: a PVC and a pod that writes a file into it.
+
+```bash
+cat <<'EOF' | kubectl apply -f -
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: pv-test
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 100Mi
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pv-writer
+spec:
+  containers:
+    - name: writer
+      image: busybox:1.36
+      command: ["sh", "-c", "date > /data/hello.txt && sleep 3600"]
+      volumeMounts:
+        - name: data
+          mountPath: /data
+  volumes:
+    - name: data
+      persistentVolumeClaim:
+        claimName: pv-test
+EOF
+kubectl wait --for=condition=Ready pod/pv-writer --timeout=120s
+kubectl get pvc pv-test
+kubectl get pod pv-writer -o wide
+kubectl exec pv-writer -- cat /data/hello.txt
+```
+
+Result: PVC `Bound` (100Mi, `local-path`), pod `Running` on urahara, the file has the date.
+
 ### 2. Observability
 
 Planned.
