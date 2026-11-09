@@ -940,6 +940,39 @@ kubectl cnpg status lab-pg -n lab-db
 
 Result: PostgreSQL `18.6` (image `ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie`), `Cluster in healthy state`. Primary `lab-pg-1` on urahara, standby `lab-pg-2` on zangetsu, each with its own `Bound` PVC. Streaming replication, asynchronous, with a replication slot; zero lag. No continuous backup configured yet.
 
+Failover drill: [manifests/pg-writer.yaml](manifests/pg-writer.yaml) inserts one row per second through the read-write Service (`lab-pg-rw`, always the current primary), with the URI from the operator-generated Secret. Kill the primary while it writes:
+
+```bash
+kubectl apply -f manifests/pg-writer.yaml
+kubectl -n lab-db logs -f pg-writer           # wait for steady "ok" lines
+kubectl -n lab-db delete pod <primary-pod>    # second terminal
+kubectl cnpg status lab-pg -n lab-db
+kubectl cnpg psql lab-pg -n lab-db -- -d app -c "select pod, count(*), min(at), max(at) from drill group by pod order by min(at);"
+kubectl -n lab-db logs pg-writer | grep -B2 -A2 FAIL
+```
+
+First run: the primary was deleted while the writer was still starting, so the writer only saw the new primary. The failover itself worked: `lab-pg-2` promoted 4 seconds after the delete (timeline 1 to 2), and `lab-pg-1` came back on its PVC as a standby in about 11 seconds.
+
+Second run (2026-11-09), primary `lab-pg-2` on zangetsu deleted at about 19:45:23 UTC:
+
+| Time (UTC) | Writer | Cluster |
+|---|---|---|
+| 19:45:23 | last `ok` on zangetsu | primary pod deleted |
+| 19:45:24 to 19:45:26 | 3 `FAIL` | no primary |
+| 19:45:27 | `ok` again, now on urahara | `lab-pg-1` promoted, timeline 3 |
+
+Write downtime: about 3 seconds. Rows grouped by server: 278 on the old primary, then the new primary from 19:45:27. Every committed row survived. Right after the promotion, `cnpg status` shows the deleted instance as `InternalError` / `the database system is starting up` while it comes back as a standby.
+
+Side finding: `kubectl logs -f` stopped with `failed to create fsnotify watcher: too many open files`. urahara hit the default inotify instance limit (Docker containers plus Kubernetes pods). Raised on both nodes:
+
+```bash
+cat <<EOF | sudo tee /etc/sysctl.d/99-inotify.conf
+fs.inotify.max_user_instances = 1024
+fs.inotify.max_user_watches   = 524288
+EOF
+sudo sysctl --system | grep inotify
+```
+
 ### 2. Observability
 
 Planned.
