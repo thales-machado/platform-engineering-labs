@@ -26,7 +26,7 @@ Tool versions are recorded in each step.
 | # | Step | Status |
 |---|---|---|
 | 0 | Diagram | done |
-| 1 | Cluster and workloads | in progress |
+| 1 | Cluster and workloads | done |
 | 2 | Observability | planned |
 | 3 | SLI, SLO and error budget | planned |
 | 4 | GitOps and progressive delivery | planned |
@@ -972,6 +972,107 @@ fs.inotify.max_user_watches   = 524288
 EOF
 sudo sysctl --system | grep inotify
 ```
+
+#### 1.23 Upgrade to 1.37 (ADR 0010)
+
+Order: etcd backup, control plane on urahara, then each node with drain and uncordon. The CNPG primary moves off a node before that node is drained.
+
+Backup first, on urahara:
+
+```bash
+sudo mkdir -p /var/backups/etcd
+kubectl -n kube-system exec etcd-urahara -- etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /var/lib/etcd/snapshot-pre-1.37.db
+sudo mv /var/lib/etcd/snapshot-pre-1.37.db /var/backups/etcd/
+sudo ls -lh /var/backups/etcd/
+```
+
+Result (2026-11-09): `snapshot-pre-1.37.db`, 18 MB.
+
+Repo switch, on each node before its upgrade:
+
+```bash
+sudo curl -fsSL https://pkgs.k8s.io/core:/stable:/v1.37/deb/Release.key | sudo gpg --dearmor -o /etc/apt/keyrings/kubernetes-apt-keyring-1.37.gpg
+echo 'deb [signed-by=/etc/apt/keyrings/kubernetes-apt-keyring-1.37.gpg] https://pkgs.k8s.io/core:/stable:/v1.37/deb/ /' | sudo tee /etc/apt/sources.list.d/kubernetes.list
+sudo apt-get update
+apt-cache madison kubeadm | head -3
+```
+
+Latest patch: `1.37.2-1.1`.
+
+Control plane, on urahara:
+
+```bash
+sudo apt-mark unhold kubeadm
+sudo apt-get install -y kubeadm=1.37.2-1.1
+sudo apt-mark hold kubeadm
+sudo kubeadm upgrade plan
+kubectl -n kube-system get cm kube-proxy -o jsonpath='{.data.config\.conf}' | grep -E '^mode:'
+sudo kubeadm upgrade apply v1.37.2
+```
+
+`upgrade plan`: API server, controller-manager, scheduler and kube-proxy 1.36.6 to 1.37.2, CoreDNS v1.14.2 to v1.14.6, etcd 3.6.8-0 to 3.7.0-0. No component config needs a manual upgrade (`kubeproxy.config.k8s.io` and `kubelet.config.k8s.io` both `no`). `upgrade apply` ended with `SUCCESS`. kube-proxy stayed in `nftables` mode: kubeadm rewrote the ConfigMap from the values already in the cluster.
+
+Right after `apply`, the node list still shows 1.36.6: the VERSION column is the kubelet. Both new CoreDNS pods were scheduled on zangetsu, because the old CoreDNS pod was still on urahara and kubeadm's CoreDNS only has a preferred anti-affinity.
+
+urahara kubelet: switchover first, then drain.
+
+```bash
+kubectl cnpg promote lab-pg lab-pg-2 -n lab-db
+kubectl drain urahara --ignore-daemonsets --delete-emptydir-data
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install -y kubelet=1.37.2-1.1 kubectl=1.37.2-1.1
+sudo apt-mark hold kubelet kubectl
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+kubectl uncordon urahara
+```
+
+On the first control plane node, `upgrade apply` already updated the kubelet config, so `kubeadm upgrade node` is not needed there. The switchover promoted `lab-pg-2` on zangetsu (timeline 4). During the drain, `lab-pg-1` stayed `Pending`: its PVC is a local-path volume on urahara, and urahara was cordoned. After the uncordon it came back as a streaming standby with zero lag in under 4 minutes.
+
+zangetsu: switchover back, spread CoreDNS, drain, upgrade on the node, uncordon.
+
+```bash
+kubectl cnpg promote lab-pg lab-pg-1 -n lab-db
+kubectl -n kube-system rollout restart deployment coredns
+kubectl drain zangetsu --ignore-daemonsets --delete-emptydir-data
+
+# on zangetsu
+sudo apt-mark unhold kubeadm
+sudo apt-get install -y kubeadm=1.37.2-1.1
+sudo apt-mark hold kubeadm
+sudo kubeadm upgrade node
+sudo apt-mark unhold kubelet kubectl
+sudo apt-get install -y kubelet=1.37.2-1.1 kubectl=1.37.2-1.1
+sudo apt-mark hold kubelet kubectl
+sudo systemctl daemon-reload
+sudo systemctl restart kubelet
+
+# on urahara
+kubectl uncordon zangetsu
+```
+
+The CoreDNS restart avoids a DNS outage: kubeadm creates no PDB for CoreDNS, so a drain of the node with both replicas evicts them at the same time.
+
+Checks:
+
+```bash
+kubectl get nodes -o wide
+kubectl get pods -A -o wide | grep -v Running
+kubectl cnpg status lab-pg -n lab-db
+kubectl get nodes urahara --show-labels | tr ',' '\n' | grep exclude || echo "label still removed"
+curl -sk https://app.lab.thalespm.me/healthz
+```
+
+Result (2026-11-09): both nodes `Ready` on `v1.37.2`, no pod outside `Running`. PostgreSQL healthy with primary `lab-pg-1` on urahara (timeline 5) and `lab-pg-2` streaming with zero lag. The `exclude-from-external-load-balancers` label did not come back (ADR 0013). The app answered `{"status": "OK"}`.
+
+Follow-ups:
+- Traefik runs with one replica, so a drain of its node stops HTTPS for a few seconds. Two replicas and a PDB.
+- A PDB for CoreDNS, or the restart step above, in every future node maintenance.
 
 ### 2. Observability
 
