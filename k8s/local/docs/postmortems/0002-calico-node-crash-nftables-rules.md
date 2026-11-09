@@ -61,5 +61,5 @@ The host's own `iptables-nft` could read the table at first, which made the prob
 | Switch kube-proxy and Calico to nftables | cluster, ADR 0011 | done |
 | Remove orphan kube-proxy iptables chains on zangetsu | zangetsu | done |
 | Before installing a CNI, list every agent that writes netfilter rules on each node (`nft list tables`) | lab checklist, private environment notes | done |
-| Smoke test after any CNI change: DNS and pod-to-pod traffic across nodes, not only `kubectl get nodes` | step 1.11 | open |
+| Smoke test after any CNI change: DNS and pod-to-pod traffic across nodes, not only `kubectl get nodes` | step 1.11 (same action as PM-0003) | done |
 | Alert on calico-node restarts and on `tigerastatus` not available | step 2 | open |

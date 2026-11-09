@@ -49,5 +49,5 @@ Removing the label from urahara (ADR 0013). The repeated drill moved the IP to u
 |---|---|---|
 | Remove the exclude label from urahara (ADR 0013) | cluster | done |
 | Repeat the failover drill | step 1.15 | done |
-| Check the label again after `kubeadm upgrade` to 1.37 | ADR 0010 upgrade step | open |
+| Check the label again after `kubeadm upgrade` to 1.37 | ADR 0010 upgrade step (README 1.23: label still removed on 2026-11-09) | done |
 | Alert when a LoadBalancer IP has no announcing node | step 2 | open |
