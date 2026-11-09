@@ -1,0 +1,43 @@
+# PostgreSQL cluster managed by CloudNativePG (ADR 0009).
+# Two instances, one per node (required anti-affinity), each on a local-path volume (ADR 0006):
+# the primary on one node, a streaming replica on the other. Failover = promote the replica.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: lab-db
+---
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: lab-pg
+  namespace: lab-db
+spec:
+  instances: 2
+  # imageName not set: the operator uses the PostgreSQL image that matches its version (multi-arch).
+
+  bootstrap:
+    initdb:
+      database: app
+      owner: app
+
+  storage:
+    storageClass: local-path
+    size: 2Gi
+
+  affinity:
+    enablePodAntiAffinity: true
+    topologyKey: kubernetes.io/hostname
+    podAntiAffinityType: required
+
+  # The Raspberry Pi has little free memory: keep Postgres small.
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+  postgresql:
+    parameters:
+      shared_buffers: "128MB"
+      max_connections: "50"
