@@ -489,6 +489,18 @@ Note: right after boot, `k8s-docker-user` shows `inactive` until Docker starts (
 
 Smoke test after both reboots (2026-11-05, step 1.11 commands): ping `0% packet loss` both ways, `nslookup` answers `10.96.0.1`. The base cluster is persistent.
 
+Docker restart drill (2026-11-09, PM-0003 action), on urahara:
+
+```bash
+sudo systemctl restart docker
+sleep 15
+systemctl is-active docker k8s-docker-user
+sudo nft list chain ip filter FORWARD | grep policy
+sudo nft list chain ip filter DOCKER-USER | grep -c 10.244.0.0/16
+```
+
+Result: both units `active`, both pod CIDR rules back in `DOCKER-USER` (count `2`). `FORWARD` policy stayed `accept` (forwarding was already on when Docker started), so the `drop` case was not exercised; the rules do not depend on it. No Kubernetes pod restarted: kubelet uses `containerd.service`, which a Docker restart does not touch. Smoke test passed: ping `0% packet loss` both ways (about 0.4 ms), `nslookup` answers `10.96.0.1`.
+
 #### 1.14 MetalLB (ADR 0005)
 
 Preflight, read-only. Check that the planned pool IPs are free on the LAN: ping finds devices that answer ICMP, and the ARP table finds devices that block ping. `REACHABLE` or `STALE` with a MAC address means in use; `FAILED` or `INCOMPLETE` means free.
