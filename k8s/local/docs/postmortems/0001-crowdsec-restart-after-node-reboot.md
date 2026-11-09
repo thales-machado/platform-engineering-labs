@@ -46,5 +46,5 @@ Nothing was done by hand. Docker's restart policy restarted CrowdSec until Loki 
 | Action | Where | Status |
 |---|---|---|
 | Before rebooting a node, list services on the other node that depend on it (CrowdSec -> Loki is the first known one) | lab checklist, private environment notes | done |
-| Alert on container restarts, so a restart is never found by chance | homelab observability | open |
+| Alert on container restarts, so a restart is never found by chance | homelab observability (cAdvisor `container_start_time_seconds`, 2026-11-09) | done |
 | In step 2 (observability), alert on pod restarts and CrashLoopBackOff from day one | this lab, step 2 | open |
