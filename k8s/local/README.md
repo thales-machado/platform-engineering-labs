@@ -911,6 +911,35 @@ Result (2026-11-06): the upgrade only changed the ConfigMap, and the `checksum/c
 
 Finding: the first `curl` right after `rollout status` returned the old message; a second `curl` returned the new one. `rollout status` reports done when the new pods are ready, but an old pod can still receive traffic for a few seconds while it terminates, until Traefik sees the updated endpoints. In production this shows up as old responses or 502s during deploys. The usual fix is a `preStop` sleep so the pod keeps serving until the endpoint change has propagated.
 
+#### 1.22 CloudNativePG (ADR 0009)
+
+Operator with Helm, and the `cnpg` kubectl plugin:
+
+```bash
+helm repo add cnpg https://cloudnative-pg.github.io/charts
+helm repo update
+helm show chart cnpg/cloudnative-pg | grep -E '^(version|appVersion)'
+helm install cnpg cnpg/cloudnative-pg -n cnpg-system --create-namespace
+kubectl -n cnpg-system rollout status deployment/cnpg-cloudnative-pg
+kubectl get crd | grep cnpg.io
+
+curl -sSfL https://github.com/cloudnative-pg/cloudnative-pg/raw/main/hack/install-cnpg-plugin.sh | sudo sh -s -- -b /usr/local/bin
+kubectl cnpg version
+```
+
+Result (2026-11-09): chart `0.29.1`, operator `1.30.1`, 11 CRDs (`clusters`, `backups`, `scheduledbackups`, `poolers`, `databases` and others). Plugin `1.30.1`.
+
+PostgreSQL cluster from [manifests/pg-cluster.yaml](manifests/pg-cluster.yaml): two instances with required anti-affinity (one per node), 2 GiB local-path volumes, small resources for the Raspberry Pi, and a database and owner `app` created at bootstrap.
+
+```bash
+kubectl apply -f manifests/pg-cluster.yaml
+kubectl -n lab-db get cluster lab-pg -w
+kubectl -n lab-db get pods,pvc -o wide
+kubectl cnpg status lab-pg -n lab-db
+```
+
+Result: PostgreSQL `18.6` (image `ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie`), `Cluster in healthy state`. Primary `lab-pg-1` on urahara, standby `lab-pg-2` on zangetsu, each with its own `Bound` PVC. Streaming replication, asynchronous, with a replication slot; zero lag. No continuous backup configured yet.
+
 ### 2. Observability
 
 Planned.

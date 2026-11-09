@@ -1,0 +1,38 @@
+# Failover drill client (step 1.22): one INSERT per second through the read-write Service
+# (lab-pg-rw, always the current primary), printing ok or FAIL with a timestamp.
+# The connection URI comes from the Secret the operator generates for the "app" user.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: pg-writer
+  namespace: lab-db
+spec:
+  restartPolicy: Never
+  containers:
+    - name: writer
+      image: postgres:18-alpine
+      env:
+        - name: DB_URI
+          valueFrom:
+            secretKeyRef:
+              name: lab-pg-app
+              key: uri
+      command:
+        - sh
+        - -c
+        - |
+          psql "$DB_URI" -qc "create table if not exists drill (id serial primary key, at timestamptz default now(), pod text)"
+          while true; do
+            if psql "$DB_URI" -qtAc "insert into drill (pod) select inet_server_addr()::text" >/dev/null 2>&1; then
+              echo "$(date +%T) ok"
+            else
+              echo "$(date +%T) FAIL"
+            fi
+            sleep 1
+          done
+      resources:
+        requests:
+          cpu: 10m
+          memory: 16Mi
+        limits:
+          memory: 64Mi
