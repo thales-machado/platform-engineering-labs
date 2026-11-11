@@ -1,0 +1,102 @@
+# kube-prometheus-stack 93.2.2, namespace lab-obs. ADR 0016.
+# Everything stateful is pinned to urahara (28 GiB, NVMe); zangetsu (7.9 GiB,
+# 3.5 GiB free) runs only the node-exporter DaemonSet.
+
+# Alerting on the availability of this cluster lives outside it, in the homelab
+# stack (step 2.2): an Alertmanager in here would be down whenever the cluster is.
+# Rules still evaluate and are visible in Grafana; they just do not page.
+alertmanager:
+  enabled: false
+
+prometheus:
+  prometheusSpec:
+    retention: 7d
+    retentionSize: 8GiB
+    scrapeInterval: 30s
+    # Without these four, the operator only picks up objects created by this
+    # chart, and the ServiceMonitors we write for Calico, Traefik and CNPG are
+    # ignored with no error anywhere.
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    nodeSelector:
+      kubernetes.io/hostname: urahara
+    resources:
+      requests:
+        cpu: 200m
+        memory: 1Gi
+      limits:
+        memory: 2Gi
+    storageSpec:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: local-path
+          accessModes: [ReadWriteOnce]
+          resources:
+            requests:
+              storage: 10Gi
+
+grafana:
+  enabled: true
+  # Routing and TLS come from the shared Gateway, as with the Dashboard.
+  ingress:
+    enabled: false
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  persistence:
+    enabled: true
+    storageClassName: local-path
+    size: 2Gi
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 384Mi
+  grafana.ini:
+    server:
+      root_url: https://grafana.lab.thalespm.me
+  # The chart's default admin password is used; read it from the secret after
+  # install and change it there, never in this file.
+
+prometheusOperator:
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+kube-state-metrics:
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  resources:
+    requests:
+      cpu: 20m
+      memory: 96Mi
+    limits:
+      memory: 192Mi
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 64Mi
+
+# kubeadm binds these components' metrics to 127.0.0.1, so the chart's default
+# ServiceMonitors would target endpoints nothing can reach. They are turned off
+# here and enabled in their own step, which changes the bind addresses on the
+# control plane. Doing both at once hides which change broke what.
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false

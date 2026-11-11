@@ -1,0 +1,60 @@
+# alloy 1.15.0 (app v1.21.3), namespace lab-obs. ADR 0016.
+# DaemonSet on both nodes. Logs are read through the Kubernetes API rather than
+# from host paths, so nothing is mounted from the node and the Pi carries the
+# smallest possible agent.
+#
+# <LOKI_SERVICE> is the Service the loki chart creates for the single binary.
+# Confirm it after installing Loki (kubectl -n lab-obs get svc) before applying
+# this file: the name differs between chart versions.
+
+controller:
+  type: daemonset
+
+alloy:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  configMap:
+    content: |-
+      discovery.kubernetes "pods" {
+        role = "pod"
+      }
+
+      discovery.relabel "pods" {
+        targets = discovery.kubernetes.pods.targets
+
+        rule {
+          source_labels = ["__meta_kubernetes_namespace"]
+          target_label  = "namespace"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_name"]
+          target_label  = "pod"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_container_name"]
+          target_label  = "container"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_node_name"]
+          target_label  = "node"
+        }
+        rule {
+          source_labels = ["__meta_kubernetes_pod_label_app_kubernetes_io_name"]
+          target_label  = "app"
+        }
+      }
+
+      loki.source.kubernetes "pods" {
+        targets    = discovery.relabel.pods.output
+        forward_to = [loki.write.default.receiver]
+      }
+
+      loki.write "default" {
+        endpoint {
+          url = "http://<LOKI_SERVICE>:3100/loki/api/v1/push"
+        }
+      }
