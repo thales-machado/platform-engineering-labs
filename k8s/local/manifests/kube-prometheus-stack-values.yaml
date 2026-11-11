@@ -57,8 +57,15 @@ grafana:
   grafana.ini:
     server:
       root_url: https://grafana.lab.thalespm.me
-  # The chart's default admin password is used; read it from the secret after
-  # install and change it there, never in this file.
+  # Credentials come from a Secret created by hand on the cluster, the same idea
+  # as ${ADMIN_USER} / ${ADMIN_PASSWORD} in the homelab .env: the names are in
+  # git, the values never are.
+  #   kubectl -n lab-obs create secret generic grafana-admin \
+  #     --from-literal=admin-user=... --from-literal=admin-password=...
+  admin:
+    existingSecret: grafana-admin
+    userKey: admin-user
+    passwordKey: admin-password
 
 prometheusOperator:
   nodeSelector:

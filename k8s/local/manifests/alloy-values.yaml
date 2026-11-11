@@ -3,9 +3,8 @@
 # from host paths, so nothing is mounted from the node and the Pi carries the
 # smallest possible agent.
 #
-# <LOKI_SERVICE> is the Service the loki chart creates for the single binary.
-# Confirm it after installing Loki (kubectl -n lab-obs get svc) before applying
-# this file: the name differs between chart versions.
+# The Loki single binary is reached through the `loki` Service on 3100,
+# confirmed after installing the chart.
 
 controller:
   type: daemonset
@@ -55,6 +54,6 @@ alloy:
 
       loki.write "default" {
         endpoint {
-          url = "http://<LOKI_SERVICE>:3100/loki/api/v1/push"
+          url = "http://loki.lab-obs.svc.cluster.local:3100/loki/api/v1/push"
         }
       }
