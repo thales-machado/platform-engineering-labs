@@ -53,6 +53,7 @@ Architecture drawn before any install. Reviewed and approved on 2026-11-05. Deci
 | [0013](docs/adr/0013-urahara-announces-lb-ips.md) | urahara can announce LoadBalancer IPs (added in step 1) |
 | [0014](docs/adr/0014-cert-manager-wildcard-dns01.md) | cert-manager with a Let's Encrypt wildcard certificate (DNS-01) (added in step 1) |
 | [0015](docs/adr/0015-kubelet-serving-certificates.md) | Kubelet serving certificates from the cluster CA (added in step 1) |
+| [0016](docs/adr/0016-in-cluster-observability-stack.md) | In-cluster observability stack: kube-prometheus-stack and Loki (added in step 2) |
 
 ### 1. Cluster and workloads
 
