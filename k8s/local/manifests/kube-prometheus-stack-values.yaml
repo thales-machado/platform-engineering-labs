@@ -96,6 +96,12 @@ kube-state-metrics:
       memory: 192Mi
 
 prometheus-node-exporter:
+  # The DaemonSet uses the host network, and the homelab already runs its own
+  # node-exporter on 9100 on urahara: the in-cluster one crash-looped with
+  # "bind: address already in use". Both are kept, on different ports.
+  service:
+    port: 9101
+    targetPort: 9101
   resources:
     requests:
       cpu: 20m
