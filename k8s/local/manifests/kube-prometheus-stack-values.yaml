@@ -57,6 +57,14 @@ grafana:
   grafana.ini:
     server:
       root_url: https://grafana.lab.thalespm.me
+  # The chart wires Prometheus as the default datasource; Loki is added here so
+  # metrics and logs are usable from the same Grafana.
+  additionalDataSources:
+    - name: Loki
+      type: loki
+      access: proxy
+      url: http://loki.lab-obs.svc.cluster.local:3100
+      isDefault: false
   # Credentials come from a Secret created by hand on the cluster, the same idea
   # as ${ADMIN_USER} / ${ADMIN_PASSWORD} in the homelab .env: the names are in
   # git, the values never are.
