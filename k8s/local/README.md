@@ -1091,25 +1091,47 @@ Follow-ups:
 
 Planned. Scope and order, after [PM-0006](docs/postmortems/0006-etcd-crash-corrupted-image-layer.md):
 
-#### 2.1 External probes (first, before anything in-cluster)
+#### 2.1 Kubernetes Dashboard, read-only (2026-11-11)
+
+A web UI before the metrics stack, to see the cluster while the rest of step 2 is built. The project is retired, so the chart comes from the archived repository; the docs on kubernetes.io still point at the old URL, which now returns 404.
+
+```bash
+helm repo add kubernetes-dashboard https://kubernetes-retired.github.io/dashboard/
+helm repo update kubernetes-dashboard
+helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
+  --version 7.14.0 \
+  --namespace kubernetes-dashboard --create-namespace \
+  -f manifests/dashboard-values.yaml
+kubectl apply -f manifests/dashboard-rbac.yaml
+kubectl apply -f manifests/dashboard-route.yaml
+kubectl -n kubernetes-dashboard get secret dashboard-viewer-token -o jsonpath='{.data.token}' | base64 -d; echo
+```
+
+Chart 7.x is five pods, including its own Kong proxy. TLS and routing stay with the shared Gateway: the chart's ingress is disabled, Kong listens on plain HTTP inside the cluster (`kong.proxy.http.enabled`), and an HTTPRoute sends `dashboard.lab.thalespm.me` to `kubernetes-dashboard-kong-proxy:80`. The Pi-hole wildcard already resolves the hostname, so no DNS change was needed.
+
+Access is a ServiceAccount token, read-only by choice: the built-in `view` ClusterRole plus a small ClusterRole for the cluster-scoped objects the UI draws (nodes, PVs, storage classes, CRDs, metrics). `view` excludes Secrets, so the Dashboard shows them as forbidden. Changing the cluster stays with `kubectl`.
+
+The token Secret is of type `kubernetes.io/service-account-token`, because `kubectl create token` issues one that expires in an hour.
+
+#### 2.2 External probes (first, before anything in-cluster)
 
 The control plane was down for 41 hours and nothing noticed. An Alertmanager inside the cluster would have been down with it, so availability of the cluster is watched from outside, by the monitoring stack that already runs on the homelab host.
 
 Files in [monitoring/external/](monitoring/external/): blackbox scrape jobs and alert rules for the API server's `/readyz`, the app through the Ingress, the nodes, and the wildcard certificate expiry. They are applied to the homelab Prometheus, not to this cluster.
 
-#### 2.2 In-cluster stack (ADR 0016)
+#### 2.3 In-cluster stack (ADR 0016)
 
 kube-prometheus-stack and Loki, both pinned to urahara with local-path volumes and 7-day retention; zangetsu runs only the per-node agents. Scrape configuration as a `ServiceMonitor` next to each component (Calico, MetalLB, Traefik, CNPG, metrics-server), Grafana exposed through the shared Gateway.
 
-#### 2.3 Alerts the postmortems asked for
+#### 2.4 Alerts the postmortems asked for
 
 Pod restarts and CrashLoopBackOff (PM-0001), calico-node restarts and `tigerastatus` (PM-0002), pod-to-pod probe between the nodes (PM-0003), a LoadBalancer IP with no node announcing it (PM-0005), control plane static pod restarts (PM-0006).
 
-#### 2.4 Integrity check of unpacked image layers
+#### 2.5 Integrity check of unpacked image layers
 
 Weekly job comparing the sha256 of the main binaries in the snapshotter against the image layers they came from. containerd verifies the compressed blob, never the extracted file, and that gap is what PM-0006 ran into.
 
-#### 2.5 Drills
+#### 2.6 Drills
 
 Drain a node during writes and watch the PodDisruptionBudgets, with the dashboards up to see it.
 
