@@ -1112,6 +1112,7 @@ Planned.
 | [PM-0003](docs/postmortems/0003-pod-traffic-dropped-by-docker-forward.md) | 2026-11-05 | Pod traffic between nodes dropped by Docker's FORWARD policy | medium |
 | [PM-0004](docs/postmortems/0004-swap-back-after-reboot.md) | 2026-11-05 | Swap came back on urahara after reboot, kubelet down | medium |
 | [PM-0005](docs/postmortems/0005-no-lb-failover-control-plane-excluded.md) | 2026-11-05 | No LoadBalancer failover when zangetsu rebooted | medium |
+| [PM-0006](docs/postmortems/0006-etcd-crash-corrupted-image-layer.md) | 2026-11-09 | etcd crash loop from a corrupted image layer on disk, control plane down 41h | high |
 
 ## Teardown
 
