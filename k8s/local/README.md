@@ -1089,7 +1089,29 @@ Follow-ups:
 
 ### 2. Observability
 
-Planned.
+Planned. Scope and order, after [PM-0006](docs/postmortems/0006-etcd-crash-corrupted-image-layer.md):
+
+#### 2.1 External probes (first, before anything in-cluster)
+
+The control plane was down for 41 hours and nothing noticed. An Alertmanager inside the cluster would have been down with it, so availability of the cluster is watched from outside, by the monitoring stack that already runs on the homelab host.
+
+Files in [monitoring/external/](monitoring/external/): blackbox scrape jobs and alert rules for the API server's `/readyz`, the app through the Ingress, the nodes, and the wildcard certificate expiry. They are applied to the homelab Prometheus, not to this cluster.
+
+#### 2.2 In-cluster stack (ADR 0016)
+
+kube-prometheus-stack and Loki, both pinned to urahara with local-path volumes and 7-day retention; zangetsu runs only the per-node agents. Scrape configuration as a `ServiceMonitor` next to each component (Calico, MetalLB, Traefik, CNPG, metrics-server), Grafana exposed through the shared Gateway.
+
+#### 2.3 Alerts the postmortems asked for
+
+Pod restarts and CrashLoopBackOff (PM-0001), calico-node restarts and `tigerastatus` (PM-0002), pod-to-pod probe between the nodes (PM-0003), a LoadBalancer IP with no node announcing it (PM-0005), control plane static pod restarts (PM-0006).
+
+#### 2.4 Integrity check of unpacked image layers
+
+Weekly job comparing the sha256 of the main binaries in the snapshotter against the image layers they came from. containerd verifies the compressed blob, never the extracted file, and that gap is what PM-0006 ran into.
+
+#### 2.5 Drills
+
+Drain a node during writes and watch the PodDisruptionBudgets, with the dashboards up to see it.
 
 ### 3. SLI, SLO and error budget
 

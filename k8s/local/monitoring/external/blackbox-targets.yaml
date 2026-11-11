@@ -1,0 +1,72 @@
+# Scrape jobs for the homelab Prometheus. The blackbox-exporter already runs there on 9115.
+# Replace <URAHARA_IP> and <ZANGETSU_IP> with the node addresses.
+
+- job_name: k8s-lab-apiserver
+  metrics_path: /probe
+  params:
+    module: [http_2xx_insecure]
+  scrape_interval: 30s
+  static_configs:
+    - targets:
+        - https://<URAHARA_IP>:6443/readyz
+      labels:
+        cluster: k8s-local
+        component: apiserver
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox-exporter:9115
+
+- job_name: k8s-lab-app
+  metrics_path: /probe
+  params:
+    module: [http_2xx]
+  scrape_interval: 30s
+  static_configs:
+    - targets:
+        - https://app.lab.thalespm.me/healthz
+      labels:
+        cluster: k8s-local
+        component: app
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox-exporter:9115
+
+- job_name: k8s-lab-nodes
+  metrics_path: /probe
+  params:
+    module: [tcp_connect]
+  scrape_interval: 30s
+  static_configs:
+    - targets:
+        - <URAHARA_IP>:22
+        - <ZANGETSU_IP>:22
+      labels:
+        cluster: k8s-local
+        component: node
+  relabel_configs:
+    - source_labels: [__address__]
+      target_label: __param_target
+    - source_labels: [__param_target]
+      target_label: instance
+    - target_label: __address__
+      replacement: blackbox-exporter:9115
+
+# The insecure module, for the blackbox-exporter config. The API server certificate
+# is signed by the cluster CA, which the homelab does not trust (see README).
+#
+# modules:
+#   http_2xx_insecure:
+#     prober: http
+#     timeout: 5s
+#     http:
+#       valid_status_codes: [200]
+#       tls_config:
+#         insecure_skip_verify: true

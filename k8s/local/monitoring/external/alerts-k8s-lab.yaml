@@ -1,0 +1,45 @@
+groups:
+  - name: k8s-lab-availability
+    rules:
+      - alert: K8sLabApiServerDown
+        expr: probe_success{cluster="k8s-local", component="apiserver"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Lab API server unreachable for 2 minutes"
+          description: >-
+            /readyz on the lab API server has failed for 2 minutes. Pods already running
+            keep serving, so the app may look fine while nothing can change in the cluster.
+            Check the control plane static pods on the node with crictl, which does not
+            need the API server. See PM-0006.
+
+      - alert: K8sLabAppDown
+        expr: probe_success{cluster="k8s-local", component="app"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Lab app not answering through the Ingress"
+          description: >-
+            app.lab.thalespm.me/healthz has failed for 2 minutes. If the API server alert
+            is not firing, the problem is in the app, Traefik or the LoadBalancer IP.
+
+      - alert: K8sLabNodeDown
+        expr: probe_success{cluster="k8s-local", component="node"} == 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lab node {{ $labels.instance }} unreachable"
+
+      - alert: K8sLabCertificateExpiringSoon
+        expr: probe_ssl_earliest_cert_expiry{cluster="k8s-local", component="app"} - time() < 14 * 24 * 3600
+        for: 1h
+        labels:
+          severity: warning
+        annotations:
+          summary: "Lab wildcard certificate expires in less than 14 days"
+          description: >-
+            cert-manager renews it, but it cannot while the control plane is down.
+            During PM-0006 the cluster went 41 hours with no controller running.

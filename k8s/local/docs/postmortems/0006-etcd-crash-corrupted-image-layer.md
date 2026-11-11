@@ -76,9 +76,11 @@ One wrong step also cost a round: removing the image and pulling it again looked
 
 | Action | Where | Status |
 |---|---|---|
-| Alert when the API server is unreachable, and when etcd is not ready | step 2 | open |
-| Alert on container restarts of control plane static pods | step 2 | open |
-| Check SMART and media errors on urahara's NVMe | host | open |
+| External blackbox probe on the API server's `/readyz` and on the app, alerting in 2 minutes, from the homelab stack and not from inside the cluster | step 2.1, [monitoring/external/](../../monitoring/external/) | written, not applied |
+| Alert when etcd is not ready, and on restarts of control plane static pods | step 2.3 | open |
+| Weekly integrity check of unpacked image layers against their image content | step 2.4 | open |
+| memtest on urahara: SMART is clean (0 media errors, 3% used), so unbuffered RAM is the remaining suspect | host | open |
+| Check SMART and media errors on urahara's NVMe | host | done (2026-11-11): clean, 0 media errors, 0 log entries, 3% used, 51 C |
 | Verify the other unpacked layers on both nodes against their image layers | step 2 | open |
 | Install `crictl` on both nodes: with the API server down it is the only way to see containers | host | done (urahara, 2026-11-11) |
 | Keep taking an etcd snapshot before every upgrade | step 1.23 | done |
