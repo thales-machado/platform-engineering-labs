@@ -76,7 +76,7 @@ One wrong step also cost a round: removing the image and pulling it again looked
 
 | Action | Where | Status |
 |---|---|---|
-| External blackbox probe on the API server's `/readyz` and on the app, alerting in 2 minutes, from the homelab stack and not from inside the cluster | step 2.2, [monitoring/external/](../../monitoring/external/) | written, not applied |
+| External blackbox probe on the API server's `/readyz` and on the app, alerting in 2 minutes, from the homelab stack and not from inside the cluster | step 2.2, [monitoring/external/](../../monitoring/external/) | done (2026-11-11), verified by stopping the API server for 3 minutes |
 | Alert when etcd is not ready, and on restarts of control plane static pods | step 2.4 | open |
 | Weekly integrity check of unpacked image layers against their image content | step 2.5 | open |
 | memtest on urahara: SMART is clean (0 media errors, 3% used), so unbuffered RAM is the remaining suspect | host | open |

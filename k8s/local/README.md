@@ -1113,11 +1113,29 @@ Access is a ServiceAccount token, read-only by choice: the built-in `view` Clust
 
 The token Secret is of type `kubernetes.io/service-account-token`, because `kubectl create token` issues one that expires in an hour.
 
-#### 2.2 External probes (first, before anything in-cluster)
+#### 2.2 External probes (2026-11-11)
 
-The control plane was down for 41 hours and nothing noticed. An Alertmanager inside the cluster would have been down with it, so availability of the cluster is watched from outside, by the monitoring stack that already runs on the homelab host.
+The control plane was down for 41 hours and nothing noticed. An Alertmanager inside the cluster would have been down with it, so availability of the cluster is watched from outside, by the monitoring stack that already runs on the homelab host: VictoriaMetrics for scraping, Grafana for alerting, blackbox-exporter for the probes. The configuration lives in the homelab repository; [monitoring/external/](monitoring/external/) lists where each piece goes.
 
-Files in [monitoring/external/](monitoring/external/): blackbox scrape jobs and alert rules for the API server's `/readyz`, the app through the Ingress, the nodes, and the wildcard certificate expiry. They are applied to the homelab Prometheus, not to this cluster.
+A blackbox module with `insecure_skip_verify` is needed for the API server, whose certificate is signed by the cluster CA. `/healthz`, `/livez`, `/readyz` and `/version` allow anonymous access on a kubeadm cluster, so the probe needs no credentials.
+
+```bash
+# from the homelab host, before wiring the alert
+docker run --rm --network <net> curlimages/curl -s \
+  'http://blackbox-exporter:9115/probe?module=http_2xx_insecure&target=https://<URAHARA_IP>:6443/readyz' \
+  | grep -E '^probe_success|^probe_http_status_code'
+```
+
+Two alerts, both `for: 2m` and `noDataState: Alerting`, because no data from the probe is itself the failure: one on `/readyz`, one on the app through the Ingress. Separating them answers the question that was invisible during PM-0006, whether the control plane is down or the app is.
+
+Verified by stopping `kube-apiserver.yaml` for three minutes: the alert arrived on the phone in about two minutes, and resolved when the manifest came back. Pods and the app were untouched the whole time.
+
+Testing the alert end to end found two defects in the homelab that had nothing to do with this lab, and both had been silent for a long time:
+
+- The Grafana webhook built its JSON by hand and interpolated the alert summary raw. Two rules quoted the container name, so their payload was invalid and the webhook answered `400`. Those alerts had never been delivered.
+- `GRAFANA_ALERT_WHATSAPP_JID` was in `.env.example` but never set on the host, so the destination was empty. No Grafana alert had ever reached anyone.
+
+The lesson is older than this lab: an alert nobody has watched fire is a guess, not a safeguard.
 
 #### 2.3 In-cluster stack (ADR 0016)
 
