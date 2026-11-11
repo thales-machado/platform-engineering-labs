@@ -1,0 +1,61 @@
+# kubernetes-dashboard chart 7.14.0, archived repo (the project is retired).
+# TLS and routing are handled by the shared Gateway, so the chart's own ingress stays off
+# and Kong listens on plain HTTP inside the cluster.
+
+app:
+  ingress:
+    enabled: false
+  scheduling:
+    nodeSelector:
+      kubernetes.io/hostname: urahara
+
+api:
+  containers:
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        memory: 256Mi
+
+auth:
+  containers:
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+web:
+  containers:
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+metricsScraper:
+  enabled: true
+  containers:
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+kong:
+  enabled: true
+  proxy:
+    http:
+      enabled: true
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
