@@ -123,7 +123,9 @@ kubeControllerManager:
 # name and the target is the pod IP.
 kubeScheduler:
   enabled: true
+# metricsBindAddress: "0.0.0.0:10249" in the kube-system/kube-proxy ConfigMap,
+# 2026-11-12. Plain HTTP with no authentication, unlike the other components.
 kubeProxy:
-  enabled: false
+  enabled: true
 kubeEtcd:
   enabled: false
