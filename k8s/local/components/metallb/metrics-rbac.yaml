@@ -1,0 +1,36 @@
+# metallb-native.yaml serves :7472 and :9120 with delegated authentication but
+# ships no binding that lets its own ServiceAccounts validate a token, so the
+# endpoint answers 500 to every caller:
+#
+#   Failed to make webhook authenticator request: tokenreviews... is forbidden:
+#   User "system:serviceaccount:metallb-system:speaker" cannot create resource
+#   "tokenreviews"
+#
+# system:auth-delegator is the built-in ClusterRole for exactly this: create
+# tokenreviews and subjectaccessreviews. The MetalLB Helm chart creates these
+# bindings; the plain manifest does not.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metallb-speaker-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: speaker
+    namespace: metallb-system
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: metallb-controller-auth-delegator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: system:auth-delegator
+subjects:
+  - kind: ServiceAccount
+    name: controller
+    namespace: metallb-system
