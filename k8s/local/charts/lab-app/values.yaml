@@ -27,7 +27,7 @@ resources:
   limits:
     memory: 128Mi
 
-# Exposed through the shared Gateway (manifests/whoami.yaml), HTTP and HTTPS listeners.
+# Exposed through the shared Gateway (components/traefik/whoami.yaml), HTTP and HTTPS listeners.
 route:
   enabled: true
   hostname: app.lab.thalespm.me

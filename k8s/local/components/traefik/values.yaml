@@ -9,7 +9,7 @@ providers:
     enabled: true
   kubernetesGateway:
     enabled: true
-# The Gateway is a separate manifest (manifests/whoami.yaml), not created by the chart.
+# The Gateway is a separate manifest (components/traefik/whoami.yaml), not created by the chart.
 gateway:
   enabled: false
 ingressClass:

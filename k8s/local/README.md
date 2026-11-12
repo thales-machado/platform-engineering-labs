@@ -21,6 +21,22 @@ Both servers also run other services with Docker Compose on ports 80 and 443. Th
 
 Tool versions are recorded in each step.
 
+## Layout
+
+```
+components/<name>/   everything one component needs, Helm values and manifests together
+charts/lab-app/      the chart written by hand for this lab
+docs/adr/            decisions
+docs/postmortems/    incidents
+monitoring/external/ where the out-of-cluster probes live, in the homelab repository
+```
+
+One folder per component rather than one folder per tool, because a change to a
+component usually touches both its values and its manifests, and because step 4
+points a GitOps controller at a directory.
+
+Commands run from `k8s/local`.
+
 ## Steps
 
 | # | Step | Status |
@@ -298,12 +314,12 @@ Latest Calico release on 2026-11-05:
 curl -s https://api.github.com/repos/projectcalico/calico/releases/latest | grep tag_name
 ```
 
-`v3.33.0`. Install the operator, then the Installation from [manifests/calico-installation.yaml](manifests/calico-installation.yaml):
+`v3.33.0`. Install the operator, then the Installation from [components/calico/installation.yaml](components/calico/installation.yaml):
 
 ```bash
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/operator-crds.yaml
 kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/tigera-operator.yaml
-kubectl create -f calico-installation.yaml
+kubectl create -f components/calico/installation.yaml
 watch kubectl get tigerastatus
 ```
 
@@ -519,13 +535,13 @@ Result (2026-11-05): `.241` to `.247` and `.249` free; `.248` answers ping and A
 
 kube-proxy in nftables mode needs no extra setting for MetalLB L2. The `strictARP` change found in many guides is only for IPVS mode.
 
-Install (official manifest), then the pool from [manifests/metallb-pool.yaml](manifests/metallb-pool.yaml). Wait for the controller before applying the pool: the pool is validated by MetalLB's webhook.
+Install (official manifest), then the pool from [components/metallb/pool.yaml](components/metallb/pool.yaml). Wait for the controller before applying the pool: the pool is validated by MetalLB's webhook.
 
 ```bash
 kubectl apply -f https://raw.githubusercontent.com/metallb/metallb/v0.16.2/config/manifests/metallb-native.yaml
 kubectl -n metallb-system wait --for=condition=Ready pod --all --timeout=180s
 kubectl -n metallb-system get pods -o wide
-kubectl apply -f metallb-pool.yaml
+kubectl apply -f components/metallb/pool.yaml
 kubectl -n metallb-system get ipaddresspools,l2advertisements
 ```
 
@@ -728,10 +744,10 @@ kubectl apply --server-side -f "https://github.com/kubernetes-sigs/gateway-api/r
 kubectl get crd | grep gateway.networking.k8s.io
 ```
 
-Then Traefik with [manifests/traefik-values.yaml](manifests/traefik-values.yaml) (fixed MetalLB IP, Ingress and Gateway API providers, default IngressClass, no chart-managed Gateway):
+Then Traefik with [components/traefik/values.yaml](components/traefik/values.yaml) (fixed MetalLB IP, Ingress and Gateway API providers, default IngressClass, no chart-managed Gateway):
 
 ```bash
-helm install traefik traefik/traefik -n traefik --create-namespace -f traefik-values.yaml
+helm install traefik traefik/traefik -n traefik --create-namespace -f components/traefik/values.yaml
 kubectl -n traefik rollout status deployment/traefik
 kubectl -n traefik get pods,svc -o wide
 kubectl get gatewayclass
@@ -746,10 +762,10 @@ Gateway API version installed: `v1.7.0` (newer than the `v1.6.1` the chart notes
 kubectl get crd gateways.gateway.networking.k8s.io -o jsonpath='{.metadata.annotations.gateway\.networking\.k8s\.io/bundle-version}{"\n"}'
 ```
 
-Test app [manifests/whoami.yaml](manifests/whoami.yaml): the same Service exposed with an Ingress (`whoami.lab.thalespm.me`) and with a Gateway and HTTPRoute (`whoami-gw.lab.thalespm.me`). Applied straight from this repo:
+Test app [components/traefik/whoami.yaml](components/traefik/whoami.yaml): the same Service exposed with an Ingress (`whoami.lab.thalespm.me`) and with a Gateway and HTTPRoute (`whoami-gw.lab.thalespm.me`). Applied straight from this repo:
 
 ```bash
-kubectl apply -f https://raw.githubusercontent.com/thales-machado/platform-engineering-labs/main/k8s/local/manifests/whoami.yaml
+kubectl apply -f https://raw.githubusercontent.com/thales-machado/platform-engineering-labs/main/k8s/local/components/traefik/whoami.yaml
 kubectl -n whoami rollout status deployment/whoami
 kubectl -n whoami get pods -o wide
 kubectl -n whoami get ingress,httproute
@@ -766,11 +782,11 @@ Also visible in the headers: `X-Forwarded-For` / `X-Real-Ip` is the node IP, not
 
 #### 1.18 HTTPS: cert-manager and a wildcard certificate
 
-cert-manager with [manifests/cert-manager-values.yaml](manifests/cert-manager-values.yaml). The DNS-01 self-check uses public resolvers: the LAN's Pi-hole answers everything under `lab.thalespm.me` locally, so it would never return the `_acme-challenge` TXT record from Cloudflare.
+cert-manager with [components/cert-manager/values.yaml](components/cert-manager/values.yaml). The DNS-01 self-check uses public resolvers: the LAN's Pi-hole answers everything under `lab.thalespm.me` locally, so it would never return the `_acme-challenge` TXT record from Cloudflare.
 
 ```bash
 helm show chart oci://quay.io/jetstack/charts/cert-manager | grep -E '^(version|appVersion)'
-helm install cert-manager oci://quay.io/jetstack/charts/cert-manager -n cert-manager --create-namespace -f cert-manager-values.yaml
+helm install cert-manager oci://quay.io/jetstack/charts/cert-manager -n cert-manager --create-namespace -f components/cert-manager/values.yaml
 kubectl -n cert-manager rollout status deployment/cert-manager-webhook
 kubectl -n cert-manager get pods -o wide
 ```
@@ -786,12 +802,12 @@ unset CF_TOKEN
 kubectl -n cert-manager get secret cloudflare-api-token
 ```
 
-ClusterIssuers for Let's Encrypt staging and production, from [manifests/cluster-issuers.yaml](manifests/cluster-issuers.yaml) (with the account email filled in), then the wildcard certificate, staging first to avoid production rate limits:
+ClusterIssuers for Let's Encrypt staging and production, from [components/cert-manager/cluster-issuers.yaml](components/cert-manager/cluster-issuers.yaml) (with the account email filled in), then the wildcard certificate, staging first to avoid production rate limits:
 
 ```bash
-kubectl apply -f cluster-issuers.yaml
+kubectl apply -f components/cert-manager/cluster-issuers.yaml
 kubectl get clusterissuer
-kubectl apply -f lab-wildcard-certificate.yaml     # with issuerRef letsencrypt-staging
+kubectl apply -f components/cert-manager/lab-wildcard-certificate.yaml     # with issuerRef letsencrypt-staging
 kubectl -n traefik get certificate lab-wildcard -w
 kubectl get challenges -A
 ```
@@ -801,11 +817,11 @@ Result (2026-11-06): both issuers `READY True`. The staging certificate for `lab
 Switch to production, make the wildcard Traefik's default certificate, and add an HTTPS listener to the Gateway (port 8443, the `websecure` entry point). The HTTPRoute has no `sectionName`, so it attaches to both listeners.
 
 ```bash
-kubectl apply -f lab-wildcard-certificate.yaml     # issuerRef letsencrypt-prod
+kubectl apply -f components/cert-manager/lab-wildcard-certificate.yaml     # issuerRef letsencrypt-prod
 kubectl -n traefik get certificate lab-wildcard -w
-helm upgrade traefik traefik/traefik -n traefik -f traefik-values.yaml   # with tlsStore.default
+helm upgrade traefik traefik/traefik -n traefik -f components/traefik/values.yaml   # with tlsStore.default
 kubectl -n traefik rollout status deployment/traefik
-kubectl apply -f whoami.yaml                       # Gateway with the HTTPS listener
+kubectl apply -f components/traefik/whoami.yaml                       # Gateway with the HTTPS listener
 kubectl -n traefik get gateway lab-gateway
 
 curl -s https://whoami.lab.thalespm.me | head -1
@@ -942,10 +958,10 @@ kubectl cnpg version
 
 Result (2026-11-09): chart `0.29.1`, operator `1.30.1`, 11 CRDs (`clusters`, `backups`, `scheduledbackups`, `poolers`, `databases` and others). Plugin `1.30.1`.
 
-PostgreSQL cluster from [manifests/pg-cluster.yaml](manifests/pg-cluster.yaml): two instances with required anti-affinity (one per node), 2 GiB local-path volumes, small resources for the Raspberry Pi, and a database and owner `app` created at bootstrap.
+PostgreSQL cluster from [components/postgres/cluster.yaml](components/postgres/cluster.yaml): two instances with required anti-affinity (one per node), 2 GiB local-path volumes, small resources for the Raspberry Pi, and a database and owner `app` created at bootstrap.
 
 ```bash
-kubectl apply -f manifests/pg-cluster.yaml
+kubectl apply -f components/postgres/cluster.yaml
 kubectl -n lab-db get cluster lab-pg -w
 kubectl -n lab-db get pods,pvc -o wide
 kubectl cnpg status lab-pg -n lab-db
@@ -953,10 +969,10 @@ kubectl cnpg status lab-pg -n lab-db
 
 Result: PostgreSQL `18.6` (image `ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie`), `Cluster in healthy state`. Primary `lab-pg-1` on urahara, standby `lab-pg-2` on zangetsu, each with its own `Bound` PVC. Streaming replication, asynchronous, with a replication slot; zero lag. No continuous backup configured yet.
 
-Failover drill: [manifests/pg-writer.yaml](manifests/pg-writer.yaml) inserts one row per second through the read-write Service (`lab-pg-rw`, always the current primary), with the URI from the operator-generated Secret. Kill the primary while it writes:
+Failover drill: [components/postgres/writer.yaml](components/postgres/writer.yaml) inserts one row per second through the read-write Service (`lab-pg-rw`, always the current primary), with the URI from the operator-generated Secret. Kill the primary while it writes:
 
 ```bash
-kubectl apply -f manifests/pg-writer.yaml
+kubectl apply -f components/postgres/writer.yaml
 kubectl -n lab-db logs -f pg-writer           # wait for steady "ok" lines
 kubectl -n lab-db delete pod <primary-pod>    # second terminal
 kubectl cnpg status lab-pg -n lab-db
@@ -1101,9 +1117,9 @@ helm repo update kubernetes-dashboard
 helm upgrade --install kubernetes-dashboard kubernetes-dashboard/kubernetes-dashboard \
   --version 7.14.0 \
   --namespace kubernetes-dashboard --create-namespace \
-  -f manifests/dashboard-values.yaml
-kubectl apply -f manifests/dashboard-rbac.yaml
-kubectl apply -f manifests/dashboard-route.yaml
+  -f components/dashboard/values.yaml
+kubectl apply -f components/dashboard/rbac.yaml
+kubectl apply -f components/dashboard/route.yaml
 kubectl -n kubernetes-dashboard get secret dashboard-viewer-token -o jsonpath='{.data.token}' | base64 -d; echo
 ```
 
@@ -1137,7 +1153,7 @@ Testing the alert end to end found two defects in the homelab that had nothing t
 
 The lesson is older than this lab: an alert nobody has watched fire is a guess, not a safeguard.
 
-#### 2.3 In-cluster stack (2026-11-12, [ADR 0016](../../docs/adr/0016-in-cluster-observability-stack.md))
+#### 2.3 In-cluster stack (2026-11-12, [ADR 0016](docs/adr/0016-in-cluster-observability-stack.md))
 
 kube-prometheus-stack for metrics, Loki for logs, Alloy as the log agent. Prometheus, Grafana and Loki are pinned to urahara with local-path volumes; zangetsu runs only the per-node agents, node-exporter and Alloy.
 
@@ -1155,12 +1171,12 @@ kubectl -n lab-obs create secret generic grafana-admin \
 unset PW
 
 helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
-  --version 93.2.2 -n lab-obs -f manifests/kube-prometheus-stack-values.yaml
+  --version 93.2.2 -n lab-obs -f components/observability/kube-prometheus-stack-values.yaml
 helm upgrade --install loki grafana/loki \
-  --version 7.6.0 -n lab-obs -f manifests/loki-values.yaml
+  --version 7.6.0 -n lab-obs -f components/observability/loki-values.yaml
 helm upgrade --install alloy grafana/alloy \
-  --version 1.15.0 -n lab-obs -f manifests/alloy-values.yaml
-kubectl apply -f manifests/grafana-route.yaml
+  --version 1.15.0 -n lab-obs -f components/observability/alloy-values.yaml
+kubectl apply -f components/observability/grafana-route.yaml
 ```
 
 The password is read with `read -rsp` so it never reaches the shell history, and Grafana reads it from the Secret through `admin.existingSecret`. Grafana creates the admin user only on its first start: if the PVC already holds a database, changing the Secret does nothing until the PVC is deleted.
