@@ -42,6 +42,13 @@ grafana:
   # Routing and TLS come from the shared Gateway, as with the Dashboard.
   ingress:
     enabled: false
+  # The sidecar adds an Alertmanager datasource whatever the rest of the chart
+  # does, and with Alertmanager disabled it points at a Service that does not
+  # exist. A datasource that answers nothing is worse than no datasource.
+  sidecar:
+    datasources:
+      alertmanager:
+        enabled: false
   nodeSelector:
     kubernetes.io/hostname: urahara
   persistence:
