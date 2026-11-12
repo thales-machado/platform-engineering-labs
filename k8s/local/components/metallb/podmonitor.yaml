@@ -1,0 +1,44 @@
+# MetalLB came from the upstream manifest, not a chart, so nothing creates a
+# scrape config for it. Without these metrics there is no way to see a
+# LoadBalancer IP that no node is announcing, which is PM-0005.
+#
+# The speaker serves :7472 over TLS with delegated authentication (a plain
+# HTTP request answers 400, an unauthenticated HTTPS one answers 401), so the
+# scrape sends a ServiceAccount token. A PodMonitor endpoint cannot read the
+# token from the pod's own filesystem the way a ServiceMonitor can, so the
+# token comes from a Secret in this namespace, next to the PodMonitor.
+#
+# The certificate is self-signed, hence insecureSkipVerify, the same choice as
+# the kubelet scrape.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: prometheus-sa-token
+  namespace: lab-obs
+  annotations:
+    kubernetes.io/service-account.name: kube-prometheus-stack-prometheus
+type: kubernetes.io/service-account-token
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: metallb
+  namespace: lab-obs
+spec:
+  namespaceSelector:
+    matchNames:
+      - metallb-system
+  selector:
+    matchLabels:
+      app: metallb
+  podMetricsEndpoints:
+    - port: metricshttps
+      scheme: https
+      path: /metrics
+      tlsConfig:
+        insecureSkipVerify: true
+      authorization:
+        type: Bearer
+        credentials:
+          name: prometheus-sa-token
+          key: token
