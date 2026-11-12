@@ -1137,9 +1137,55 @@ Testing the alert end to end found two defects in the homelab that had nothing t
 
 The lesson is older than this lab: an alert nobody has watched fire is a guess, not a safeguard.
 
-#### 2.3 In-cluster stack (ADR 0016)
+#### 2.3 In-cluster stack (2026-11-12, [ADR 0016](../../docs/adr/0016-in-cluster-observability-stack.md))
 
-kube-prometheus-stack and Loki, both pinned to urahara with local-path volumes and 7-day retention; zangetsu runs only the per-node agents. Scrape configuration as a `ServiceMonitor` next to each component (Calico, MetalLB, Traefik, CNPG, metrics-server), Grafana exposed through the shared Gateway.
+kube-prometheus-stack for metrics, Loki for logs, Alloy as the log agent. Prometheus, Grafana and Loki are pinned to urahara with local-path volumes; zangetsu runs only the per-node agents, node-exporter and Alloy.
+
+Alertmanager is disabled. Alerting lives outside the cluster (2.2), where it survives the cluster being down, and two alerting systems that can both page are worse than one.
+
+```bash
+helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
+helm repo add grafana https://grafana.github.io/helm-charts
+helm repo update
+
+kubectl create namespace lab-obs
+read -rsp 'Grafana admin password: ' PW; echo
+kubectl -n lab-obs create secret generic grafana-admin \
+  --from-literal=admin-user=keydrop --from-literal=admin-password="$PW"
+unset PW
+
+helm upgrade --install kube-prometheus-stack prometheus-community/kube-prometheus-stack \
+  --version 93.2.2 -n lab-obs -f manifests/kube-prometheus-stack-values.yaml
+helm upgrade --install loki grafana/loki \
+  --version 7.6.0 -n lab-obs -f manifests/loki-values.yaml
+helm upgrade --install alloy grafana/alloy \
+  --version 1.15.0 -n lab-obs -f manifests/alloy-values.yaml
+kubectl apply -f manifests/grafana-route.yaml
+```
+
+The password is read with `read -rsp` so it never reaches the shell history, and Grafana reads it from the Secret through `admin.existingSecret`. Grafana creates the admin user only on its first start: if the PVC already holds a database, changing the Secret does nothing until the PVC is deleted.
+
+Loki runs as `SingleBinary` with filesystem storage and replication factor 1. Retention needs three settings together, and two of them are easy to miss: `limits_config.retention_period`, `compactor.retention_enabled: true` and `compactor.delete_request_store`. Without the compactor part, old data is hidden from queries but never deleted from disk.
+
+Four things only showed up when the stack was running:
+
+- node-exporter crashed on urahara with `address already in use`. The homelab runs its own node-exporter in Docker on 9100 on the same machine. The in-cluster one moved to 9101; the homelab keeps 9100.
+- Prometheus and Loki use distroless images, so `kubectl exec ... wget` or `cat` fails with `executable file not found`. Query the HTTP API through a port-forward, or read the rendered config from the ConfigMap or Secret the chart created.
+- Both Alloy pods were tailing all 47 containers in the cluster, not just their own node. `discovery.kubernetes` with `role = "pod"` lists the whole cluster unless a field selector narrows it: `field = "spec.nodeName=" + sys.env("NODE_NAME")`, with `NODE_NAME` from `fieldRef`. Every log line was being read twice through the API server.
+- The `node` label was always empty. For `role = "pod"` the meta label is `__meta_kubernetes_pod_node_name`; `__meta_kubernetes_node_name` only exists for `role = "node"`.
+
+The app itself was silent in Loki. podinfo logs one line per HTTP request only at debug level, so the chart gained a `logLevel` value, set to `debug` here. Almost every line is a probe on `/readyz` and `/healthz`, which is honest traffic for a lab with no users and good material for LogQL filtering later.
+
+```bash
+kubectl -n lab-obs port-forward svc/kube-prometheus-stack-prometheus 9090:9090 &
+curl -s 'http://127.0.0.1:9090/api/v1/targets?state=active' | python3 -c "
+import sys,json,collections
+d=json.load(sys.stdin)
+c=collections.Counter((t['labels'].get('job'),t['health']) for t in d['data']['activeTargets'])
+[print(f'{h:8} {j}  x{n}') for (j,h),n in sorted(c.items())]"
+```
+
+Result (2026-11-12): 16 active targets, all `up` (apiserver, coredns, kubelet, kube-state-metrics, node-exporter, grafana, operator, prometheus). Loki holds seven labels and eleven namespaces, and `{namespace="lab-app"}` returns the request log. The control plane components are still invisible on purpose; they come in 2.4.
 
 #### 2.4 Alerts the postmortems asked for
 
