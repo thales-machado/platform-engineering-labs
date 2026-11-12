@@ -113,8 +113,10 @@ prometheus-node-exporter:
 # ServiceMonitors would target endpoints nothing can reach. They are turned off
 # here and enabled in their own step, which changes the bind addresses on the
 # control plane. Doing both at once hides which change broke what.
+# --bind-address=0.0.0.0, 2026-11-12. Port 10257, same auth model as the
+# scheduler.
 kubeControllerManager:
-  enabled: false
+  enabled: true
 # --bind-address=0.0.0.0 in /etc/kubernetes/manifests/kube-scheduler.yaml,
 # 2026-11-12. The port still demands a bearer token; the chart's ServiceMonitor
 # uses https with insecureSkipVerify, because the certificate is for the node
