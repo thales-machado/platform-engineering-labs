@@ -38,7 +38,7 @@ spec:
         - name: app
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
-          command: ["./podinfo", "--port=9898", "--level=info"]
+          command: ["./podinfo", "--port=9898", "--level={{ .Values.logLevel }}"]
           ports:
             - name: http
               containerPort: 9898

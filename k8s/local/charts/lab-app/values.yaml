@@ -16,6 +16,10 @@ ui:
 secret:
   apiToken: "change-me"
 
+# podinfo writes a line per HTTP request only at debug. At info it is silent
+# after boot, which leaves the lab with no application logs to query.
+logLevel: debug
+
 resources:
   requests:
     cpu: 50m
