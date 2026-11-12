@@ -49,6 +49,11 @@ grafana:
     datasources:
       alertmanager:
         enabled: false
+  # Removing a provisioning file does not remove the datasource from Grafana's
+  # database, so it has to be deleted by name. Grafana applies this at start.
+  deleteDatasources:
+    - name: Alertmanager
+      orgId: 1
   nodeSelector:
     kubernetes.io/hostname: urahara
   persistence:
