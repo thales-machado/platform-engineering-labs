@@ -1,0 +1,42 @@
+# Prometheus read access for the homelab Grafana, which owns alerting for this
+# cluster (step 2.2: an alert path inside the cluster dies with the cluster).
+#
+# The API has no authentication of its own, so a Traefik basic-auth middleware
+# sits in front, attached to the HTTPRoute with an ExtensionRef filter. The
+# Secret holds an htpasswd line and is created by hand on the node, never
+# committed:
+#
+#   htpasswd -nbB <user> '<password>' > /tmp/u
+#   kubectl -n lab-obs create secret generic prometheus-basicauth --from-file=users=/tmp/u
+#   shred -u /tmp/u
+apiVersion: traefik.io/v1alpha1
+kind: Middleware
+metadata:
+  name: prometheus-auth
+  namespace: lab-obs
+spec:
+  basicAuth:
+    secret: prometheus-basicauth
+    removeHeader: true
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: prometheus
+  namespace: lab-obs
+spec:
+  parentRefs:
+    - name: lab-gateway
+      namespace: traefik
+  hostnames:
+    - prometheus.lab.thalespm.me
+  rules:
+    - filters:
+        - type: ExtensionRef
+          extensionRef:
+            group: traefik.io
+            kind: Middleware
+            name: prometheus-auth
+      backendRefs:
+        - name: kube-prometheus-stack-prometheus
+          port: 9090

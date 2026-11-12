@@ -1203,9 +1203,42 @@ c=collections.Counter((t['labels'].get('job'),t['health']) for t in d['data']['a
 
 Result (2026-11-12): 16 active targets, all `up` (apiserver, coredns, kubelet, kube-state-metrics, node-exporter, grafana, operator, prometheus). Loki holds seven labels and eleven namespaces, and `{namespace="lab-app"}` returns the request log. The control plane components are still invisible on purpose; they come in 2.4.
 
-#### 2.4 Alerts the postmortems asked for
+#### 2.4 Control plane metrics and the alerts the postmortems asked for
 
-Pod restarts and CrashLoopBackOff (PM-0001), calico-node restarts and `tigerastatus` (PM-0002), pod-to-pod probe between the nodes (PM-0003), a LoadBalancer IP with no node announcing it (PM-0005), control plane static pod restarts (PM-0006).
+kubeadm binds etcd, the scheduler, the controller-manager and kube-proxy to `127.0.0.1`, so a Prometheus running in a pod cannot reach any of them. Each one was opened in its own round, with a check in between, because PM-0006 started with a change to a control plane static pod.
+
+| Component | Where the address lives | From | To |
+|---|---|---|---|
+| kube-scheduler | `/etc/kubernetes/manifests/kube-scheduler.yaml`, `--bind-address` | `127.0.0.1` | `0.0.0.0`, port 10259 |
+| kube-controller-manager | `/etc/kubernetes/manifests/kube-controller-manager.yaml`, `--bind-address` | `127.0.0.1` | `0.0.0.0`, port 10257 |
+| kube-proxy | ConfigMap `kube-system/kube-proxy`, `metricsBindAddress` | `""` | `0.0.0.0:10249` |
+| etcd | `/etc/kubernetes/manifests/etcd.yaml`, `--listen-metrics-urls` | `http://127.0.0.1:2381` | `http://0.0.0.0:2381` |
+
+The scheduler and the controller-manager still demand a bearer token, so a browser gets `403 system:anonymous`, which is the proof that the port is open and authentication works. kube-proxy on 10249 and etcd on 2381 are plain HTTP with no authentication; etcd's 2381 serves `/metrics` and `/health` only, and the key-value API stays on 2379 behind client certificates.
+
+Two traps, both costing a round:
+
+- Editing a static pod manifest replaces the pod, so the API server refuses connections for a few seconds. `kubectl` fails with `TLS handshake timeout` and the cluster is fine. Check etcd with `crictl` instead of waiting on `kubectl`.
+- A mounted ConfigMap updates on the kubelet's sync loop, up to about a minute. Restarting kube-proxy immediately after `kubectl apply` gives the pods the old file. The second restart is the one that works.
+
+Before touching etcd, a snapshot, taken from inside the container because `etcdctl` is not on the host:
+
+```bash
+kubectl -n kube-system exec etcd-urahara -- etcdctl \
+  --endpoints=https://127.0.0.1:2379 \
+  --cacert=/etc/kubernetes/pki/etcd/ca.crt \
+  --cert=/etc/kubernetes/pki/etcd/server.crt \
+  --key=/etc/kubernetes/pki/etcd/server.key \
+  snapshot save /var/lib/etcd/snapshot-$(date +%Y%m%d-%H%M).db
+```
+
+Result (2026-11-12): 21 targets, all `up`. etcd logged `initial corruption checking passed` on restart, which checks the database and not the binary, so it would not have caught PM-0006.
+
+These four addresses live on the node, not in this repository. A `kubeadm init` on a rebuilt urahara puts them back on `127.0.0.1` and the targets go down.
+
+Alerting stays outside the cluster, for the reason in 2.2. The homelab Grafana reads in-cluster Prometheus as a second datasource, through [components/observability/prometheus-route.yaml](components/observability/prometheus-route.yaml): the Prometheus API has no authentication of its own, so a Traefik basic-auth middleware sits in front of it, attached to the HTTPRoute with an `ExtensionRef` filter.
+
+Rules to write: pod restarts and CrashLoopBackOff (PM-0001), calico-node restarts and `tigerastatus` (PM-0002), pod-to-pod probe between the nodes (PM-0003), a LoadBalancer IP with no node announcing it (PM-0005), control plane static pod restarts (PM-0006).
 
 #### 2.5 Integrity check of unpacked image layers
 
