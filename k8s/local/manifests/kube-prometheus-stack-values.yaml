@@ -109,10 +109,11 @@ prometheus-node-exporter:
     limits:
       memory: 64Mi
 
-# kubeadm binds these components' metrics to 127.0.0.1, so the chart's default
-# ServiceMonitors would target endpoints nothing can reach. They are turned off
-# here and enabled in their own step, which changes the bind addresses on the
-# control plane. Doing both at once hides which change broke what.
+# kubeadm binds these components' metrics to 127.0.0.1, so nothing outside the
+# node can scrape them. Each one was opened in its own round on 2026-11-12,
+# with a check in between, rather than all at once: doing both at once hides
+# which change broke what. The bind addresses live on the control plane node,
+# not in this file, so a rebuilt node needs them again (step 2.4).
 # --bind-address=0.0.0.0, 2026-11-12. Port 10257, same auth model as the
 # scheduler.
 kubeControllerManager:
@@ -127,5 +128,13 @@ kubeScheduler:
 # 2026-11-12. Plain HTTP with no authentication, unlike the other components.
 kubeProxy:
   enabled: true
+# --listen-metrics-urls=http://0.0.0.0:2381, 2026-11-12. Port 2381 serves
+# /metrics and /health only; the key-value API stays on 2379 behind client
+# certificates.
 kubeEtcd:
-  enabled: false
+  enabled: true
+  service:
+    port: 2381
+    targetPort: 2381
+  serviceMonitor:
+    scheme: http
