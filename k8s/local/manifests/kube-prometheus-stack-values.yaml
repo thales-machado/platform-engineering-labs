@@ -115,8 +115,12 @@ prometheus-node-exporter:
 # control plane. Doing both at once hides which change broke what.
 kubeControllerManager:
   enabled: false
+# --bind-address=0.0.0.0 in /etc/kubernetes/manifests/kube-scheduler.yaml,
+# 2026-11-12. The port still demands a bearer token; the chart's ServiceMonitor
+# uses https with insecureSkipVerify, because the certificate is for the node
+# name and the target is the pod IP.
 kubeScheduler:
-  enabled: false
+  enabled: true
 kubeProxy:
   enabled: false
 kubeEtcd:
