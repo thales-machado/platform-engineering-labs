@@ -33,6 +33,14 @@ kube-proxy=/usr/local/bin/kube-proxy
 calico-node=/usr/bin/calico-node
 "
 
+# A check that finds nothing must fail, not report an empty success. On a node
+# without crictl the loop below would simply find no containers and write a
+# file full of nothing, which reads as "all good" on a dashboard.
+if ! command -v crictl >/dev/null 2>&1; then
+  echo "crictl not found: cannot inspect containers on this node" >&2
+  exit 1
+fi
+
 mkdir -p "$TEXTFILE_DIR" "$(dirname "$BASELINE")"
 [ -f "$BASELINE" ] || : > "$BASELINE"
 
@@ -79,6 +87,11 @@ for entry in $BINARIES; do
     failed=$((failed + 1))
   fi
 done
+
+if [ "$checked" = "0" ]; then
+  echo "no known binaries found on this node: nothing was verified" >&2
+  exit 1
+fi
 
 if [ "$UPDATE" = "1" ]; then
   mv "$tmp.baseline" "$BASELINE"
