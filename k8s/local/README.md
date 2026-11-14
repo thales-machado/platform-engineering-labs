@@ -1265,7 +1265,19 @@ Two of them needed something built before a rule was possible.
 
 Result (2026-11-14): both probes `1`, MetalLB targets `up`, eight rules loaded and Normal.
 
-Drill, same day: `kubectl -n lab-obs scale deploy/netcheck-zangetsu --replicas=0` at 08:54, back at 09:04. During those ten minutes `probe_success` read `cross-node 0` and `same-node 1`, which is the signature of a network failure rather than a dead workload. Scaling to zero rather than deleting the pod is deliberate: a deleted pod returns in seconds and never reaches the three-minute threshold.
+Drill, same day: `kubectl -n lab-obs scale deploy/netcheck-zangetsu --replicas=0` at 08:54:13, back at 09:04:23. During those ten minutes `probe_success` read `cross-node 0` and `same-node 1`, which is the signature of a network failure rather than a dead workload. Scaling to zero rather than deleting the pod is deliberate: a deleted pod returns in seconds and never reaches the three-minute threshold.
+
+| Time | Event |
+|---|---|
+| 08:54:13 | target scaled to zero |
+| 08:57:43 | rule fires, exactly `for: 3m` later |
+| 08:58 | WhatsApp alert |
+| 09:04:23 | target back |
+| 09:08 | WhatsApp resolved |
+
+Reading the Grafana log alone was misleading: `Sending alerts to local notifier` is printed for resolved alerts as well as firing ones, so the line repeating after recovery looked like an alert stuck on. The phone is the only place that answers the question the alert exists to answer.
+
+With this, every postmortem action that was waiting on step 2 is closed, except `tigerastatus`, which has no metric: the Tigera operator publishes it as a CRD only.
 
 #### 2.5 Integrity check of unpacked image layers
 

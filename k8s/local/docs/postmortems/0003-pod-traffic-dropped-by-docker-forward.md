@@ -51,4 +51,4 @@ ACCEPT rules for `10.244.0.0/16` (source and destination) in `DOCKER-USER`, the 
 | Keep the smoke test (step 1.11) and run it after every network change | lab README | done |
 | Drill: restart Docker and reboot a node, then check that the rules come back and the smoke test passes | step 1.13 (reboot 2026-11-05, Docker restart 2026-11-09) | done |
 | Step 5 (Cilium): add `10.245.0.0/16` to the script during the migration and remove `10.244.0.0/16` after it | step 5 | open |
-| Alert on pod-to-pod connectivity (for example a blackbox probe between nodes) | step 2 | open |
+| Alert on pod-to-pod connectivity (for example a blackbox probe between nodes) | step 2.4, [components/netcheck/](../../components/netcheck/), rule `k8s-lab-cross-node-network` | done (2026-11-14), verified by scaling the zangetsu target to zero for 10min: alert in 3min, WhatsApp at 08:58, resolved at 09:08 |
