@@ -6,8 +6,15 @@
 # the restore lands in an emptyDir, and the second etcd listens on loopback
 # inside this pod's own network namespace, not on the host.
 #
+# The etcd image is distroless and has no shell, so every container runs a
+# binary directly with arguments. Only the first step needs a shell, to pick
+# the newest file, and that one uses busybox.
+#
 #   kubectl apply -f drills/etcd-restore-check.yaml
-#   kubectl -n kube-system logs -f etcd-restore-check
+#   kubectl -n kube-system logs etcd-restore-check -c status
+#   kubectl -n kube-system logs etcd-restore-check -c restore
+#   kubectl -n kube-system exec etcd-restore-check -- etcdctl \
+#     --endpoints http://127.0.0.1:2399 get /registry/namespaces --prefix --keys-only
 #   kubectl -n kube-system delete pod etcd-restore-check
 apiVersion: v1
 kind: Pod
@@ -18,58 +25,68 @@ spec:
   restartPolicy: Never
   nodeSelector:
     kubernetes.io/hostname: urahara
+  initContainers:
+    - name: pick
+      image: busybox:stable
+      securityContext:
+        runAsUser: 0
+      command:
+        - sh
+        - -c
+        - 'set -e; S=$(ls -t /snap/snapshot-*.db | head -1); echo "newest snapshot: $S"; cp "$S" /work/snapshot.db; ls -lh /work/snapshot.db'
+      volumeMounts:
+        - { name: snapshots, mountPath: /snap, readOnly: true }
+        - { name: work, mountPath: /work }
+    - name: status
+      image: registry.k8s.io/etcd:3.7.0-0
+      securityContext:
+        runAsUser: 0
+      command: ["etcdutl", "snapshot", "status", "/work/snapshot.db", "-w", "table"]
+      volumeMounts:
+        - { name: work, mountPath: /work }
+    - name: restore
+      image: registry.k8s.io/etcd:3.7.0-0
+      securityContext:
+        runAsUser: 0
+      command:
+        - etcdutl
+        - snapshot
+        - restore
+        - /work/snapshot.db
+        - --name=restore-check
+        - --initial-cluster=restore-check=http://127.0.0.1:2400
+        - --initial-advertise-peer-urls=http://127.0.0.1:2400
+        - --data-dir=/work/etcd
+      volumeMounts:
+        - { name: work, mountPath: /work }
   containers:
     - name: etcd
       image: registry.k8s.io/etcd:3.7.0-0
       securityContext:
         runAsUser: 0
       command:
-        - /bin/sh
-        - -c
-        - |
-          set -e
-          SNAP=$(ls -t /snap/snapshot-*.db | head -1)
-          echo "== snapshot: $SNAP"
-          etcdutl snapshot status "$SNAP" -w table
-
-          echo "== restoring into an empty data dir"
-          etcdutl snapshot restore "$SNAP" \
-            --name restore-check \
-            --initial-cluster restore-check=http://127.0.0.1:2400 \
-            --initial-advertise-peer-urls http://127.0.0.1:2400 \
-            --data-dir /restore/etcd
-
-          echo "== starting etcd on the restored data"
-          etcd --data-dir /restore/etcd \
-            --name restore-check \
-            --listen-client-urls http://127.0.0.1:2399 \
-            --advertise-client-urls http://127.0.0.1:2399 \
-            --listen-peer-urls http://127.0.0.1:2400 \
-            --initial-advertise-peer-urls http://127.0.0.1:2400 \
-            --initial-cluster restore-check=http://127.0.0.1:2400 \
-            --initial-cluster-token restore-check \
-            --listen-metrics-urls http://127.0.0.1:2401 >/tmp/etcd.log 2>&1 &
-          sleep 10
-
-          export ETCDCTL_ENDPOINTS=http://127.0.0.1:2399
-          echo "== namespaces found in the restored data"
-          etcdctl get /registry/namespaces --prefix --keys-only | grep -c registry
-          etcdctl get /registry/namespaces --prefix --keys-only | grep registry
-
-          echo "== total keys"
-          etcdctl get "" --prefix --keys-only | grep -c . || true
-
-          echo "== OK: the snapshot opens and serves reads"
+        - etcd
+        - --data-dir=/work/etcd
+        - --name=restore-check
+        - --listen-client-urls=http://127.0.0.1:2399
+        - --advertise-client-urls=http://127.0.0.1:2399
+        - --listen-peer-urls=http://127.0.0.1:2400
+        - --initial-advertise-peer-urls=http://127.0.0.1:2400
+        - --initial-cluster=restore-check=http://127.0.0.1:2400
+        - --initial-cluster-token=restore-check
+        - --listen-metrics-urls=http://127.0.0.1:2401
       volumeMounts:
-        - name: snapshots
-          mountPath: /snap
-          readOnly: true
-        - name: restore
-          mountPath: /restore
+        - { name: work, mountPath: /work }
+      resources:
+        requests:
+          cpu: 50m
+          memory: 128Mi
+        limits:
+          memory: 512Mi
   volumes:
     - name: snapshots
       hostPath:
         path: /var/lib/etcd
         type: Directory
-    - name: restore
+    - name: work
       emptyDir: {}
