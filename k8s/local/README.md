@@ -1285,7 +1285,30 @@ Weekly job comparing the sha256 of the main binaries in the snapshotter against 
 
 #### 2.6 Drills
 
-Drain a node during writes and watch the PodDisruptionBudgets, with the dashboards up to see it.
+**Drain a node while the database is being written to (2026-11-14).** [components/postgres/writer.yaml](components/postgres/writer.yaml) inserts one row per second through `lab-pg-rw` and records `inet_server_addr()`, so the switchover is visible in the data and not only in the logs.
+
+zangetsu is the node to drain, not urahara: Prometheus, Grafana and Loki are pinned to urahara with `local-path` volumes, which are node-bound, so draining urahara would leave them Pending and blind the dashboards the drill is meant to be watched on. The primary was moved to zangetsu first with `kubectl cnpg promote`, which cost 9 seconds of writes.
+
+Two things the drill found:
+
+- **CloudNativePG switches over on the cordon, not on the eviction.** The first `drain` aborted immediately (`cannot delete Pods that declare no controller: lab-db/pg-writer`) but the cordon had already applied, and CNPG moved the primary anyway: `Switching over to lab-pg-1, because primary instance was running on unschedulable node zangetsu`. 8 seconds of writes lost, with no drain command still running. The PDB is a safety net here, not the trigger.
+- **A bare Pod blocks a drain.** `pg-writer` has no controller, so `drain` refuses to evict it and stops. It is now pinned to urahara; the observer must never sit on the node being drained.
+
+With the primary already moved, the real drain took 7 seconds and the writer never left `ok`. Losing the standby costs nothing.
+
+```sql
+select prev::time, at::time, at - prev as gap
+from (select at, lag(at) over (order by at) prev from drill) t
+where at - prev > interval '2 seconds' order by at;
+```
+
+Result: gaps of 9s (manual promote), 8s (cordon switchover) and 3s (the writer pod being recreated by hand), and nothing at all during the drain window. Every gap is explained; no write was lost.
+
+`lab-pg-2` stayed Pending while the node was cordoned, because its `local-path` volume exists only on zangetsu. With node-bound storage, a node down means a database with no replica, not a database that moved.
+
+The cross-node probe went red during the drain and no alert fired, which is correct: the pod was Pending for about 65 seconds, under the 3 minute threshold. Short planned maintenance stays quiet.
+
+Still to do: restore the etcd snapshot into a throwaway directory. A snapshot nobody has restored is a guess.
 
 ### 3. SLI, SLO and error budget
 
