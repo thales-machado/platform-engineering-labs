@@ -1308,7 +1308,22 @@ Result: gaps of 9s (manual promote), 8s (cordon switchover) and 3s (the writer p
 
 The cross-node probe went red during the drain and no alert fired, which is correct: the pod was Pending for about 65 seconds, under the 3 minute threshold. Short planned maintenance stays quiet.
 
-Still to do: restore the etcd snapshot into a throwaway directory. A snapshot nobody has restored is a guess.
+**Restore an etcd snapshot (2026-11-14).** Snapshots have been taken before every upgrade and never opened, which makes them an assumption rather than a backup. [drills/etcd-restore-check.yaml](drills/etcd-restore-check.yaml) opens the newest one without touching the cluster: `/var/lib/etcd` mounted read-only, the restore written to an `emptyDir`, and a second etcd listening on loopback inside the pod's own network namespace.
+
+```bash
+kubectl apply -f drills/etcd-restore-check.yaml
+kubectl -n kube-system logs etcd-restore-check -c status
+kubectl -n kube-system exec etcd-restore-check -- etcdctl \
+  --endpoints http://127.0.0.1:2399 get /registry/namespaces --prefix --keys-only
+kubectl -n kube-system delete pod etcd-restore-check
+```
+
+Result: hash `5609f790`, revision 1099089, 1224 keys, 37 MB, and all 16 namespaces read back out of the restored copy.
+
+Two things the drill taught, both about the tools rather than the backup:
+
+- `etcdctl snapshot restore` no longer exists. etcd 3.6 moved it to `etcdutl`, so most of what you find written about this online fails on this cluster.
+- The etcd image is distroless. The first version of this drill was one shell script and never started: `exec: "/bin/sh": no such file or directory`. Each step now runs a binary directly, with busybox doing the only part that needs a shell. That is the third distroless image in step 2 after Prometheus and Loki; `exec ... sh`, `wget` and `cat` are gone from most official images now.
 
 ### 3. SLI, SLO and error budget
 

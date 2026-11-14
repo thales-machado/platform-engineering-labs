@@ -84,4 +84,5 @@ One wrong step also cost a round: removing the image and pulling it again looked
 | Verify the other unpacked layers on both nodes against their image layers | step 2 | open |
 | Install `crictl` on both nodes: with the API server down it is the only way to see containers | host | done (urahara, 2026-11-11) |
 | Keep taking an etcd snapshot before every upgrade | step 1.23 | done |
+| Restore a snapshot and read keys out of it, so the backup is tested and not assumed | step 2.6, [drills/etcd-restore-check.yaml](../../drills/etcd-restore-check.yaml) | done (2026-11-14): 1224 keys, 16 namespaces |
 | Host sysctls set by homelab containers (`transparent_hugepage`, `overcommit_memory`) should be explicit and versioned, not a side effect | homelab | open |
