@@ -43,7 +43,7 @@ Commands run from `k8s/local`.
 |---|---|---|
 | 0 | Diagram | done |
 | 1 | Cluster and workloads | done |
-| 2 | Observability | planned |
+| 2 | Observability | done |
 | 3 | SLI, SLO and error budget | planned |
 | 4 | GitOps and progressive delivery | planned |
 | 5 | CNI migration: Calico to Cilium | planned |
@@ -1105,7 +1105,7 @@ Follow-ups:
 
 ### 2. Observability
 
-Planned. Scope and order, after [PM-0006](docs/postmortems/0006-etcd-crash-corrupted-image-layer.md):
+Done (2026-11-11 to 2026-11-14). Scope and order were set by [PM-0006](docs/postmortems/0006-etcd-crash-corrupted-image-layer.md), the 41 hour outage nobody noticed, so the work started outside the cluster and moved inwards:
 
 #### 2.1 Kubernetes Dashboard, read-only (2026-11-11)
 
