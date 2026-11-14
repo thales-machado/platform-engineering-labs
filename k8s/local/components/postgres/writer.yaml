@@ -8,6 +8,12 @@ metadata:
   namespace: lab-db
 spec:
   restartPolicy: Never
+  # A bare Pod has no controller, so `kubectl drain` refuses to evict it and
+  # aborts (2026-11-14). It is pinned to urahara so it survives a drain of
+  # zangetsu and keeps writing through it. To drain urahara instead, move this
+  # to zangetsu first: the observer must never live on the node being drained.
+  nodeSelector:
+    kubernetes.io/hostname: urahara
   containers:
     - name: writer
       image: postgres:18-alpine
