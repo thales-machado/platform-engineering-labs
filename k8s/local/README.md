@@ -1265,6 +1265,8 @@ Two of them needed something built before a rule was possible.
 
 Result (2026-11-14): both probes `1`, MetalLB targets `up`, eight rules loaded and Normal.
 
+Drill, same day: `kubectl -n lab-obs scale deploy/netcheck-zangetsu --replicas=0` at 08:54, back at 09:04. During those ten minutes `probe_success` read `cross-node 0` and `same-node 1`, which is the signature of a network failure rather than a dead workload. Scaling to zero rather than deleting the pod is deliberate: a deleted pod returns in seconds and never reaches the three-minute threshold.
+
 #### 2.5 Integrity check of unpacked image layers
 
 Weekly job comparing the sha256 of the main binaries in the snapshotter against the image layers they came from. containerd verifies the compressed blob, never the extracted file, and that gap is what PM-0006 ran into.
