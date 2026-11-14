@@ -1238,7 +1238,32 @@ These four addresses live on the node, not in this repository. A `kubeadm init` 
 
 Alerting stays outside the cluster, for the reason in 2.2. The homelab Grafana reads in-cluster Prometheus as a second datasource, through [components/observability/prometheus-route.yaml](components/observability/prometheus-route.yaml): the Prometheus API has no authentication of its own, so a Traefik basic-auth middleware sits in front of it, attached to the HTTPRoute with an `ExtensionRef` filter.
 
-Rules to write: pod restarts and CrashLoopBackOff (PM-0001), calico-node restarts and `tigerastatus` (PM-0002), pod-to-pod probe between the nodes (PM-0003), a LoadBalancer IP with no node announcing it (PM-0005), control plane static pod restarts (PM-0006).
+Eight rules, all with the label `shortname: K8SLAB`, all delivered to WhatsApp through the contact point that 2.2 proved works:
+
+| Rule | Query | Fires | From |
+|---|---|---|---|
+| API server unreachable | `probe_success{job="blackbox-k8s-lab"}` | < 1 for 2m | PM-0006 |
+| App not answering | `probe_success` on the public health endpoint | < 1 for 2m | 2.2 |
+| Control plane container restarted | restarts of etcd, apiserver, controller-manager, scheduler in 15min | > 0 for 5m | PM-0006 |
+| Node not Ready | `kube_node_status_condition` | < 1 for 5m | general |
+| Pod in CrashLoopBackOff | `kube_pod_container_status_waiting_reason` | > 0 for 10m | PM-0001 |
+| calico-node restarting | restarts in `calico-system` in 30min | > 2 for 5m | PM-0002 |
+| LoadBalancer IP not announced | `sum(metallb_speaker_announced) or vector(0)` | < 1 for 5m | PM-0005 |
+| Cross-node traffic failing | `min(probe_success{path="cross-node"})` | < 1 for 3m | PM-0003 |
+
+Two of them needed something built before a rule was possible.
+
+**MetalLB (PM-0005)** came from the upstream manifest, which creates no scrape config, so [components/metallb/podmonitor.yaml](components/metallb/podmonitor.yaml) adds a `PodMonitor`. Port 7472 serves TLS with delegated authentication: plain HTTP answers `400` and an unauthenticated request answers `401`, so the scrape carries a ServiceAccount token from a Secret, because a `PodMonitor` endpoint cannot read the token from the pod's own filesystem the way a `ServiceMonitor` can. That still answered `500`, and the speaker's log said why: `metallb-native.yaml` ships no binding for `tokenreviews`, so MetalLB cannot validate the token it is given. Its Helm chart creates that binding; the plain manifest does not. [components/metallb/metrics-rbac.yaml](components/metallb/metrics-rbac.yaml) binds `system:auth-delegator` to both ServiceAccounts. The useful metric is `metallb_speaker_announced`, one series per LoadBalancer Service with the announcing node.
+
+**Pod-to-pod traffic (PM-0003)** had no signal at all. Calico broke east-west traffic while both nodes reported Ready and every pod kept running, so nothing noticed. [components/netcheck/](components/netcheck/) pins one target to each node behind its own ClusterIP and runs a blackbox-exporter on urahara that probes both. Traffic to the Service whose only endpoint sits on zangetsu crosses the CNI; the probe to the local one is the control:
+
+| cross-node | same-node | meaning |
+|---|---|---|
+| fail | pass | the network between the nodes |
+| fail | fail | the exporter or the whole cluster |
+| pass | fail | that one target pod |
+
+Result (2026-11-14): both probes `1`, MetalLB targets `up`, eight rules loaded and Normal.
 
 #### 2.5 Integrity check of unpacked image layers
 
