@@ -1,0 +1,46 @@
+# Two probes from the same exporter, so one failing tells you which half of the
+# path is broken:
+#
+#   cross-node fails, same-node passes  -> the CNI between the nodes
+#   both fail                           -> the exporter or the whole cluster
+#   same-node fails only                -> that target pod
+#
+# probe_success carries the label path=cross-node or path=same-node, which is
+# what the alert in the homelab Grafana reads.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: netcheck-cross-node
+  namespace: lab-obs
+spec:
+  interval: 30s
+  module: http_2xx
+  prober:
+    url: blackbox-exporter.lab-obs.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - http://netcheck-zangetsu.lab-obs.svc.cluster.local/
+      labels:
+        path: cross-node
+        from: urahara
+        to: zangetsu
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: netcheck-same-node
+  namespace: lab-obs
+spec:
+  interval: 30s
+  module: http_2xx
+  prober:
+    url: blackbox-exporter.lab-obs.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - http://netcheck-urahara.lab-obs.svc.cluster.local/
+      labels:
+        path: same-node
+        from: urahara
+        to: urahara

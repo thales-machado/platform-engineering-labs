@@ -1,0 +1,110 @@
+# PM-0003: Calico broke pod-to-pod traffic between the nodes while both nodes
+# kept reporting Ready and every pod kept running. Nothing in the cluster
+# noticed, because nothing was crossing the node boundary on purpose.
+#
+# One target pinned to each node, each behind its own ClusterIP. A Service with
+# a single endpoint on the other node forces traffic across the CNI, which is
+# the path that failed.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netcheck-urahara
+  namespace: lab-obs
+  labels:
+    app: netcheck
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netcheck
+      target-node: urahara
+  template:
+    metadata:
+      labels:
+        app: netcheck
+        target-node: urahara
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: urahara
+      containers:
+        - name: whoami
+          image: traefik/whoami:latest
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netcheck-urahara
+  namespace: lab-obs
+spec:
+  selector:
+    app: netcheck
+    target-node: urahara
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: netcheck-zangetsu
+  namespace: lab-obs
+  labels:
+    app: netcheck
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: netcheck
+      target-node: zangetsu
+  template:
+    metadata:
+      labels:
+        app: netcheck
+        target-node: zangetsu
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: zangetsu
+      containers:
+        - name: whoami
+          image: traefik/whoami:latest
+          ports:
+            - name: http
+              containerPort: 80
+          readinessProbe:
+            httpGet:
+              path: /
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 16Mi
+            limits:
+              memory: 32Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: netcheck-zangetsu
+  namespace: lab-obs
+spec:
+  selector:
+    app: netcheck
+    target-node: zangetsu
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
