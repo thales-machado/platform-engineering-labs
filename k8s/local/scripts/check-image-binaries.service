@@ -1,0 +1,11 @@
+[Unit]
+Description=Hash control plane binaries against their baseline (k8s lab, PM-0006)
+Documentation=https://github.com/thales-machado/platform-engineering-labs
+After=containerd.service
+Requires=containerd.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/check-image-binaries.sh
+Nice=10
+IOSchedulingClass=idle

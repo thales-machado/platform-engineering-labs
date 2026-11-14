@@ -1,0 +1,12 @@
+[Unit]
+Description=Weekly integrity check of unpacked image layers (k8s lab)
+
+[Timer]
+# Sunday early, away from the backup window, with jitter so both nodes do not
+# hash at the same moment.
+OnCalendar=Sun *-*-* 04:17:00
+RandomizedDelaySec=20m
+Persistent=true
+
+[Install]
+WantedBy=timers.target
