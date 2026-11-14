@@ -23,15 +23,11 @@ TEXTFILE=${TEXTFILE_DIR}/binary_integrity.prom
 UPDATE=0
 [ "${1:-}" = "--update" ] && UPDATE=1
 
-# container name -> path of the binary inside that container
-BINARIES="
-etcd=/usr/local/bin/etcd
-kube-apiserver=/usr/local/bin/kube-apiserver
-kube-controller-manager=/usr/local/bin/kube-controller-manager
-kube-scheduler=/usr/local/bin/kube-scheduler
-kube-proxy=/usr/local/bin/kube-proxy
-calico-node=/usr/bin/calico-node
-"
+# Containers whose binary this node should verify. A node reports only the
+# ones it actually runs. No path is listed on purpose: /proc/<pid>/exe points
+# at the exact file the process is executing, whatever the image layout, so
+# there is no map to keep in step with upstream images.
+BINARIES="etcd kube-apiserver kube-controller-manager kube-scheduler kube-proxy calico-node"
 
 # A check that finds nothing must fail, not report an empty success. On a node
 # without crictl the loop below would simply find no containers and write a
@@ -50,10 +46,7 @@ trap 'rm -f "$tmp" "$tmp.baseline"' EXIT
 checked=0
 failed=0
 
-for entry in $BINARIES; do
-  name=${entry%%=*}
-  path=${entry#*=}
-
+for name in $BINARIES; do
   # A node runs only some of these. A missing container is not a failure.
   id=$(crictl ps --name "^${name}$" -q 2>/dev/null | head -1) || true
   [ -n "$id" ] || continue
@@ -62,7 +55,7 @@ for entry in $BINARIES; do
         | python3 -c 'import sys,json; print(json.load(sys.stdin)["info"]["pid"])') || true
   [ -n "${pid:-}" ] || continue
 
-  file="/proc/${pid}/root${path}"
+  file="/proc/${pid}/exe"
   [ -r "$file" ] || continue
 
   hash=$(sha256sum "$file" | cut -d' ' -f1)
