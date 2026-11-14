@@ -78,11 +78,11 @@ One wrong step also cost a round: removing the image and pulling it again looked
 |---|---|---|
 | External blackbox probe on the API server's `/readyz` and on the app, alerting in 2 minutes, from the homelab stack and not from inside the cluster | step 2.2, [monitoring/external/](../../monitoring/external/) | done (2026-11-11), verified by stopping the API server for 3 minutes |
 | Alert on restarts of control plane static pods, etcd included | step 2.4, rule `k8s-lab-control-plane-restart` | done (2026-11-14) |
-| Weekly integrity check of unpacked image layers against their image content | step 2.5 | open |
+| Weekly integrity check of unpacked image layers | step 2.5, [scripts/check-image-binaries.sh](../../scripts/check-image-binaries.sh) | done (2026-11-14): 6 binaries on urahara, 2 on zangetsu, alerting from the homelab |
 | memtest on urahara: SMART is clean (0 media errors, 3% used), so unbuffered RAM is the remaining suspect | host | open |
 | Check SMART and media errors on urahara's NVMe | host | done (2026-11-11): clean, 0 media errors, 0 log entries, 3% used, 51 C |
-| Verify the other unpacked layers on both nodes against their image layers | step 2 | open |
-| Install `crictl` on both nodes: with the API server down it is the only way to see containers | host | done (urahara, 2026-11-11) |
+| Verify the unpacked files against the image layers they came from, not only against a baseline | later | open: the weekly check compares with a baseline, so it catches corruption and drift but not a deliberate swap |
+| Install `crictl` on both nodes: with the API server down it is the only way to see containers | host | done (urahara 2026-11-11, zangetsu 2026-11-14) |
 | Keep taking an etcd snapshot before every upgrade | step 1.23 | done |
 | Restore a snapshot and read keys out of it, so the backup is tested and not assumed | step 2.6, [drills/etcd-restore-check.yaml](../../drills/etcd-restore-check.yaml) | done (2026-11-14): 1224 keys, 16 namespaces |
 | Host sysctls set by homelab containers (`transparent_hugepage`, `overcommit_memory`) should be explicit and versioned, not a side effect | homelab | open |

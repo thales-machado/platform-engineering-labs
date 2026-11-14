@@ -1279,9 +1279,37 @@ Reading the Grafana log alone was misleading: `Sending alerts to local notifier`
 
 With this, every postmortem action that was waiting on step 2 is closed, except `tigerastatus`, which has no metric: the Tigera operator publishes it as a CRD only.
 
-#### 2.5 Integrity check of unpacked image layers
+#### 2.5 Integrity check of unpacked image layers (2026-11-14)
 
-Weekly job comparing the sha256 of the main binaries in the snapshotter against the image layers they came from. containerd verifies the compressed blob, never the extracted file, and that gap is what PM-0006 ran into.
+containerd verifies the digest of the compressed blob it downloads and never the file it extracted, while the kubelet executes the extracted file. PM-0006 was exactly that gap: a corrupted etcd binary, same size, different sha256, crashing with SIGSEGV while the running process carried on from page cache.
+
+[scripts/check-image-binaries.sh](scripts/check-image-binaries.sh) hashes each control plane binary through `/proc/<pid>/exe` and compares it with a baseline. Reading through `/proc` matters twice over: it is the exact file the process is executing, whatever the image layout, and it reads the file on disk rather than the copy in memory the process is living on.
+
+```bash
+sudo install -m 0755 scripts/check-image-binaries.sh /usr/local/sbin/
+sudo install -m 0644 scripts/check-image-binaries.{service,timer} /etc/systemd/system/
+sudo systemctl daemon-reload && sudo systemctl enable --now check-image-binaries.timer
+sudo /usr/local/sbin/check-image-binaries.sh --update   # after any image upgrade
+```
+
+The result is a metric rather than an email: the script writes `lab_binary_integrity` into node-exporter's textfile directory, the homelab node-exporter picks it up on the next scrape, and two rules in the homelab Grafana watch it. The homelab exporter rather than the in-cluster one, deliberately: the failure this exists for took the cluster down for 41 hours, and a metric living inside that cluster would have gone down with it.
+
+| Rule | Query | Fires |
+|---|---|---|
+| binary differs from baseline | `lab_binary_integrity` | < 1 for 10m, critical |
+| check has not run | `time() - lab_binary_check_timestamp_seconds` | > 8 days, warning |
+
+The second rule matters more than it looks. A textfile metric keeps serving its last value forever, so a dead timer and a healthy one are indistinguishable without a timestamp.
+
+Result (2026-11-14): six binaries on urahara (etcd, kube-apiserver, kube-controller-manager, kube-scheduler, kube-proxy, calico-node) and two on zangetsu, all matching, all eight series in VictoriaMetrics.
+
+Three things went wrong while building it, and all three are worth keeping:
+
+- The first version mapped each container to a hardcoded binary path. `calico-node` has no binary at the obvious path, and keeping such a map in step with upstream images is work with no payoff. `/proc/<pid>/exe` removes the map entirely.
+- On a node without `crictl` the script found no containers and still wrote a metrics file full of nothing, which reads as "all good" on a dashboard. A check that verifies nothing now fails instead. That is the same class of bug as the alert that never fired in 2.2.
+- `crictl` was installed on urahara during PM-0006 and never on zangetsu, which is why that was found at all.
+
+What this does not do: it detects corruption and accidental drift, not tampering. Anything that can rewrite the binary can rewrite the baseline next to it. Verifying the extracted file against the image layer it came from would close that, and it stays open.
 
 #### 2.6 Drills
 
