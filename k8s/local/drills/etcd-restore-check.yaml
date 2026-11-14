@@ -1,0 +1,75 @@
+# Step 2.6: open the newest etcd snapshot and read keys out of it. A snapshot
+# nobody has restored is a guess, and PM-0006 was a file that looked fine until
+# something tried to use it.
+#
+# Nothing here touches the live cluster: /var/lib/etcd is mounted read-only,
+# the restore lands in an emptyDir, and the second etcd listens on loopback
+# inside this pod's own network namespace, not on the host.
+#
+#   kubectl apply -f drills/etcd-restore-check.yaml
+#   kubectl -n kube-system logs -f etcd-restore-check
+#   kubectl -n kube-system delete pod etcd-restore-check
+apiVersion: v1
+kind: Pod
+metadata:
+  name: etcd-restore-check
+  namespace: kube-system
+spec:
+  restartPolicy: Never
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  containers:
+    - name: etcd
+      image: registry.k8s.io/etcd:3.7.0-0
+      securityContext:
+        runAsUser: 0
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -e
+          SNAP=$(ls -t /snap/snapshot-*.db | head -1)
+          echo "== snapshot: $SNAP"
+          etcdutl snapshot status "$SNAP" -w table
+
+          echo "== restoring into an empty data dir"
+          etcdutl snapshot restore "$SNAP" \
+            --name restore-check \
+            --initial-cluster restore-check=http://127.0.0.1:2400 \
+            --initial-advertise-peer-urls http://127.0.0.1:2400 \
+            --data-dir /restore/etcd
+
+          echo "== starting etcd on the restored data"
+          etcd --data-dir /restore/etcd \
+            --name restore-check \
+            --listen-client-urls http://127.0.0.1:2399 \
+            --advertise-client-urls http://127.0.0.1:2399 \
+            --listen-peer-urls http://127.0.0.1:2400 \
+            --initial-advertise-peer-urls http://127.0.0.1:2400 \
+            --initial-cluster restore-check=http://127.0.0.1:2400 \
+            --initial-cluster-token restore-check \
+            --listen-metrics-urls http://127.0.0.1:2401 >/tmp/etcd.log 2>&1 &
+          sleep 10
+
+          export ETCDCTL_ENDPOINTS=http://127.0.0.1:2399
+          echo "== namespaces found in the restored data"
+          etcdctl get /registry/namespaces --prefix --keys-only | grep -c registry
+          etcdctl get /registry/namespaces --prefix --keys-only | grep registry
+
+          echo "== total keys"
+          etcdctl get "" --prefix --keys-only | grep -c . || true
+
+          echo "== OK: the snapshot opens and serves reads"
+      volumeMounts:
+        - name: snapshots
+          mountPath: /snap
+          readOnly: true
+        - name: restore
+          mountPath: /restore
+  volumes:
+    - name: snapshots
+      hostPath:
+        path: /var/lib/etcd
+        type: Directory
+    - name: restore
+      emptyDir: {}
