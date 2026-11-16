@@ -26,6 +26,10 @@ secret:
 serviceMonitor:
   enabled: true
 
+# Extra flags for podinfo. Used in step 4 to ship a version that fails on
+# purpose, so the canary analysis has something real to reject.
+extraArgs: []
+
 # Step 4: progressive delivery. With this off the chart renders a plain
 # Deployment, so it still works on a cluster without Argo Rollouts.
 rollout:
