@@ -21,6 +21,11 @@ secret:
   existingSecret: ""
   apiToken: "change-me"
 
+# Scrape the app itself. Needed before any canary analysis: the decision to
+# promote or abort reads these metrics.
+serviceMonitor:
+  enabled: true
+
 # podinfo writes a line per HTTP request only at debug. At info it is silent
 # after boot, which leaves the lab with no application logs to query.
 logLevel: debug

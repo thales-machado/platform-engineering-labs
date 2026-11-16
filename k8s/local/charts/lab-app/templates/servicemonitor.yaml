@@ -1,0 +1,21 @@
+{{- if .Values.serviceMonitor.enabled }}
+{{- /*
+  A canary cannot be judged without metrics from the app itself. podinfo
+  exposes Prometheus metrics on the same port as its traffic, so the analysis
+  in step 4 reads request counts per version from here.
+*/}}
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ include "lab-app.fullname" . }}
+  labels:
+    {{- include "lab-app.labels" . | nindent 4 }}
+spec:
+  selector:
+    matchLabels:
+      {{- include "lab-app.selectorLabels" . | nindent 6 }}
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 15s
+{{- end }}

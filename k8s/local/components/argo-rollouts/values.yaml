@@ -1,0 +1,32 @@
+# argo-rollouts 2.43.12 (app v1.10.2), namespace argo-rollouts. ADR 0018.
+#
+# The controller watches Rollout objects and drives the canary: it scales the
+# new version up in steps, runs the analysis between steps, and promotes or
+# aborts on the result. Installed by hand like Argo CD, then adopted.
+controller:
+  replicas: 1
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+  # Where the AnalysisTemplates point when they say "prometheus".
+  metricsProviders:
+    prometheus:
+      enabled: true
+
+# The read-only UI that shows the steps of a rollout as they happen. Routed
+# through the shared Gateway like everything else.
+dashboard:
+  enabled: true
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 128Mi
