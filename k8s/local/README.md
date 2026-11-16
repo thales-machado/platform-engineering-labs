@@ -1445,6 +1445,41 @@ kubectl -n lab-app set image deploy/lab-app app=ghcr.io/stefanprodan/podinfo:6.1
 
 Worth knowing what it would *not* revert: `replicas`. The chart omits that field when the HPA is enabled, so Git has no opinion about it and Argo has nothing to enforce. Argo CD reverts what is written down, not everything that moves.
 
+#### 4.3 Canary with automated analysis (2026-11-16)
+
+Argo Rollouts 2.43.12. `lab-app` becomes a `Rollout` instead of a `Deployment`: the pod template is identical, what changes is who owns the update. The chart keeps the Deployment behind `rollout.enabled: false`, so it still works on a cluster without the controller.
+
+Three pieces have to exist before a canary can decide anything, and only the first is the controller:
+
+1. **Metrics from the app.** The chart gained a `ServiceMonitor`; podinfo publishes `http_request_duration_seconds_count` split by `status`, which is an error rate.
+2. **A way to tell the versions apart.** `canaryService` and `stableService` are two extra Services whose selectors the controller keeps pointing at the right `rollouts-pod-template-hash`. No user traffic goes through them; they exist so Prometheus labels each sample with the version that served it.
+3. **A question with a threshold.** An `AnalysisTemplate` asking what share of the canary's requests did not return a 5xx, with `failureLimit: 0`.
+
+Steps: 20% weight, pause 60s, analysis, 50%, pause 30s, 100%. Without a traffic router, `setWeight` controls the share of **pods** carrying the new version rather than the share of requests; Traefik spreads requests across the endpoints of one Service, so the two are close but not equal. A Gateway API traffic router would make it exact and is a later improvement.
+
+The HPA now targets the Rollout (`apiVersion: argoproj.io/v1alpha1`), which splits the replicas it is given between stable and canary.
+
+**Drill: ship a build that fails on purpose.** podinfo's `--random-error` returns a 5xx for one request in three, so no separate image was needed, and the deploy happened the only way left: a commit.
+
+```bash
+# load, so the analysis has requests to judge
+while true; do curl -sk -o /dev/null https://app.lab.thalespm.me/; sleep 0.2; done
+```
+
+| Time (UTC) | Event |
+|---|---|
+| 20:00:26 | commit with `--random-error=true` pushed |
+| ~20:02:40 | Argo synced, one canary pod next to two stable |
+| 20:03:26 | first measurement, `1` |
+| 20:03:56 | second measurement, `0.948`, below the 0.95 threshold |
+| 20:03:56 | `RolloutAborted`, canary scaled to zero, stable untouched |
+
+It worked, and the number is the interesting part. A build failing one request in three should measure about `0.67`, not `0.948`. The selectors were right, so the cause was time: the analysis began 60s after the canary pod appeared, and `rate(...[1m])` still contained samples from when the canary Service was pointing at the stable pods. Their healthy traffic was averaged in.
+
+The abort was therefore a near miss rather than a clean pass. A threshold of 0.90 instead of 0.95 would have promoted a broken release. The metric now carries `initialDelay: 90s`, so the first question is not asked until the window holds only canary data.
+
+That is the value of running the drill instead of trusting the design: the mechanism worked, and the measurement behind it was wrong in a way that only showed up with a real failing build.
+
 ### 5. CNI migration: Calico to Cilium
 
 Planned.
