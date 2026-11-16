@@ -1,0 +1,109 @@
+{{- if .Values.rollout.enabled }}
+{{- /*
+  Step 4: the same workload as a Rollout instead of a Deployment. The pod
+  template below is identical; what changes is who owns the update.
+
+  There is no traffic router here, so setWeight controls the share of pods
+  carrying the new version rather than a share of requests. Traefik spreads
+  requests across the endpoints of one Service, so 20% of pods receives roughly
+  20% of traffic. A Gateway API traffic router would make that exact, and is a
+  later improvement rather than a prerequisite.
+
+  canaryService and stableService exist so the analysis can tell the two
+  versions apart: the controller keeps their selectors pointing at the right
+  pod-template-hash, and Prometheus labels every sample with the Service it was
+  scraped through.
+*/}}
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ include "lab-app.fullname" . }}
+  labels:
+    {{- include "lab-app.labels" . | nindent 4 }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.replicaCount }}
+  {{- end }}
+  revisionHistoryLimit: 3
+  selector:
+    matchLabels:
+      {{- include "lab-app.selectorLabels" . | nindent 6 }}
+  strategy:
+    canary:
+      canaryService: {{ include "lab-app.fullname" . }}-canary
+      stableService: {{ include "lab-app.fullname" . }}-stable
+      steps:
+        - setWeight: 20
+        # Long enough for the analysis window to hold real requests.
+        - pause:
+            duration: 60s
+        - analysis:
+            templates:
+              - templateName: {{ include "lab-app.fullname" . }}-success-rate
+        - setWeight: 50
+        - pause:
+            duration: 30s
+        - setWeight: 100
+  template:
+    metadata:
+      labels:
+        {{- include "lab-app.selectorLabels" . | nindent 8 }}
+      annotations:
+        # Env vars are read only at start: a config change must roll the pods.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secret.yaml") . | sha256sum }}  # empty when existingSecret is set
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      # Spread replicas across nodes when possible.
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              {{- include "lab-app.selectorLabels" . | nindent 14 }}
+      containers:
+        - name: app
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          command: ["./podinfo", "--port=9898", "--level={{ .Values.logLevel }}"]
+          ports:
+            - name: http
+              containerPort: 9898
+          envFrom:
+            - configMapRef:
+                name: {{ include "lab-app.fullname" . }}
+          env:
+            - name: API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.secret.existingSecret | default (include "lab-app.fullname" .) }}
+                  key: API_TOKEN
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: http
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}
+{{- end }}

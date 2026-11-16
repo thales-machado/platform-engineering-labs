@@ -1,0 +1,39 @@
+{{- if .Values.rollout.enabled }}
+{{- /*
+  The question the canary has to answer: of the requests the new version
+  served, how many did not fail? Measured on the canary Service only, so the
+  stable pods cannot hide a broken version behind their own healthy traffic.
+
+  failureLimit 0 means one bad measurement aborts and the Rollout scales the
+  canary back to zero on its own.
+
+  With little traffic the query returns nothing and the measurement is
+  Inconclusive rather than failed, which pauses instead of promoting. That is
+  the safe direction, and it is why the drill generates load.
+*/}}
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: {{ include "lab-app.fullname" . }}-success-rate
+  labels:
+    {{- include "lab-app.labels" . | nindent 4 }}
+spec:
+  metrics:
+    - name: success-rate
+      interval: 30s
+      count: 3
+      successCondition: result[0] >= {{ .Values.rollout.successRate }}
+      failureLimit: 0
+      provider:
+        prometheus:
+          address: {{ .Values.rollout.prometheusAddress }}
+          query: |
+            sum(rate(http_request_duration_seconds_count{
+              namespace="{{ .Release.Namespace }}",
+              service="{{ include "lab-app.fullname" . }}-canary",
+              status!~"5.."}[1m]))
+            /
+            sum(rate(http_request_duration_seconds_count{
+              namespace="{{ .Release.Namespace }}",
+              service="{{ include "lab-app.fullname" . }}-canary"}[1m]))
+{{- end }}

@@ -1,0 +1,35 @@
+{{- if .Values.rollout.enabled }}
+{{- /*
+  Two extra Services whose selectors the Rollout controller manages: it adds
+  the pod-template-hash of the canary to one and of the stable version to the
+  other. Nothing routes user traffic through them; they exist so metrics carry
+  a service label that says which version answered.
+*/}}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lab-app.fullname" . }}-canary
+  labels:
+    {{- include "lab-app.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    {{- include "lab-app.selectorLabels" . | nindent 4 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "lab-app.fullname" . }}-stable
+  labels:
+    {{- include "lab-app.labels" . | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    {{- include "lab-app.selectorLabels" . | nindent 4 }}
+{{- end }}

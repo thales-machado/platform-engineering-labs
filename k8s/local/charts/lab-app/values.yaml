@@ -26,6 +26,14 @@ secret:
 serviceMonitor:
   enabled: true
 
+# Step 4: progressive delivery. With this off the chart renders a plain
+# Deployment, so it still works on a cluster without Argo Rollouts.
+rollout:
+  enabled: true
+  # Share of successful requests the canary must hold to be promoted.
+  successRate: "0.95"
+  prometheusAddress: http://kube-prometheus-stack-prometheus.lab-obs.svc.cluster.local:9090
+
 # podinfo writes a line per HTTP request only at debug. At info it is silent
 # after boot, which leaves the lab with no application logs to query.
 logLevel: debug

@@ -7,8 +7,15 @@ metadata:
     {{- include "lab-app.labels" . | nindent 4 }}
 spec:
   scaleTargetRef:
+    {{- if .Values.rollout.enabled }}
+    # A Rollout is a scale target like a Deployment: the HPA writes replicas
+    # and the Rollout controller splits them between stable and canary.
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    {{- else }}
     apiVersion: apps/v1
     kind: Deployment
+    {{- end }}
     name: {{ include "lab-app.fullname" . }}
   minReplicas: {{ .Values.autoscaling.minReplicas }}
   maxReplicas: {{ .Values.autoscaling.maxReplicas }}
