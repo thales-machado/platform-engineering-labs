@@ -1,0 +1,41 @@
+# Argo CD managing its own chart (ADR 0018). Installed by hand first, adopted
+# once it was healthy: a tool that cannot be installed without itself is a poor
+# first step, and a tool that cannot be *repaired* without itself is a risk
+# worth naming. If a bad sync breaks the server, the fix is the same
+# `helm upgrade` that bootstrapped it, from the same values file.
+#
+# Two sources, which is how a chart from a Helm repository takes its values
+# from a Git repository: the second source is referenced as $values by the
+# first.
+#
+# ServerSideApply is required here. The ApplicationSet CRD is larger than the
+# 262144-byte limit of the last-applied-configuration annotation that
+# client-side apply writes, and the sync fails with "metadata.annotations: Too
+# long" without it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://argoproj.github.io/argo-helm
+      chart: argo-cd
+      targetRevision: 10.18.0
+      helm:
+        valueFiles:
+          - $values/k8s/local/components/argocd/values.yaml
+    - repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false
