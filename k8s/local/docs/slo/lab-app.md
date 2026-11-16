@@ -25,13 +25,23 @@ Availability over the window:
 avg_over_time(probe_success{instance="https://app.lab.thalespm.me/healthz"}[30d])
 ```
 
-Error budget remaining, as a fraction of the budget:
+Minutes of the budget already spent, counted from failed probes:
 
 ```promql
-1 - ((1 - avg_over_time(probe_success{instance="https://app.lab.thalespm.me/healthz"}[30d])) / 0.001)
+(count_over_time(probe_success{instance="https://app.lab.thalespm.me/healthz"}[30d])
+ - sum_over_time(probe_success{instance="https://app.lab.thalespm.me/healthz"}[30d])) * 15 / 60
+```
+
+Error budget remaining, as a fraction:
+
+```promql
+1 - (((count_over_time(probe_success{instance="https://app.lab.thalespm.me/healthz"}[30d])
+      - sum_over_time(probe_success{instance="https://app.lab.thalespm.me/healthz"}[30d])) * 15 / 60) / 43.2)
 ```
 
 Negative means the budget is spent and the SLO is missed.
+
+Counting failed samples rather than scaling the error ratio is deliberate. The obvious formula, `(1 - avg_over_time(...[30d])) * 43200`, multiplies a ratio measured over whatever data exists by the length of the full window. With 5 days of history it turned a 6 minute outage into "36.6 minutes spent", which is a forecast dressed as a measurement. Counting bad probes times the scrape interval gives real downtime at any coverage.
 
 ## Burn-rate alerts
 
@@ -62,3 +72,4 @@ This is a lab, so there is no release freeze to trigger. The policy is narrower 
 | Window ending | Availability | Budget used | Notes |
 |---|---|---|---|
 | 2026-11-16 | 100% (5 days of data) | 0% | window still filling, full on 2026-12-11 |
+| 2026-11-16 | 99.92% | 6m of 43m12s | deliberate test: lab-app scaled to zero for 6m01s, fast-burn alert delivered in 4m |

@@ -1378,6 +1378,12 @@ Two constraints decided that before any target was picked: in-cluster Prometheus
 
 The target came from the data rather than from preference. The service had done 100% over 7 days including a full node drain, so 99% would be unfailable; 99.99% is 4m 19s a month, less than one restart of the single-replica Traefik, and an SLO that normal maintenance breaks teaches people to ignore it.
 
+Alerting is two-window burn rate, not a threshold on availability: 14.4x over 1h confirmed by 5m, and 6x over 6h confirmed by 30m. The short window stops an alert from firing about an outage that already ended.
+
+Tested on 2026-11-16 by scaling `lab-app` to zero for 6m01s. The fast-burn alert was delivered 4 minutes after the start: two minutes for the 5m window to cross the threshold, plus `for: 2m`. Burn rate read 100x, which is correct for 6 minutes lost in a 60 minute window.
+
+The test also found a bug in the dashboard. "Budget spent" read 36.6 minutes for a 6 minute outage, because the obvious formula multiplies the error ratio by the full 30 days while the window holds only 5 days of data: a forecast presented as a measurement. Counting failed probes and multiplying by the scrape interval reports real downtime at any coverage. An SLO nobody has watched fail is a guess, the same as an alert nobody has watched fire.
+
 ### 4. GitOps and progressive delivery
 
 Planned.
