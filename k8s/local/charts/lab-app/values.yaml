@@ -28,10 +28,7 @@ serviceMonitor:
 
 # Extra flags for podinfo. Used in step 4 to ship a version that fails on
 # purpose, so the canary analysis has something real to reject.
-extraArgs:
-  # DRILL 2026-11-16: 1 in 3 requests returns a 5xx. This is the canary the
-  # analysis is supposed to reject. Removed right after the drill.
-  - "--random-error=true"
+extraArgs: []
 
 # Step 4: progressive delivery. With this off the chart renders a plain
 # Deployment, so it still works on a cluster without Argo Rollouts.
