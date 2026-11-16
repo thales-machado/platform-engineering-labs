@@ -1,0 +1,78 @@
+# Nothing checked what went into this repository until 2026-11-16. Argo CD
+# syncs whatever is on main, so a typo in a chart reached the cluster and was
+# found there. This runs before the merge instead.
+#
+# Three questions, in order of how early they catch a mistake:
+#   1. does the chart lint
+#   2. does it render
+#   3. is what it renders valid Kubernetes, including the CRDs this cluster
+#      actually uses (Rollout, Application, ServiceMonitor, Probe, HTTPRoute)
+name: validate
+
+on:
+  push:
+    branches: [main]
+    paths: ["k8s/**", ".github/workflows/validate.yaml"]
+  pull_request:
+    paths: ["k8s/**", ".github/workflows/validate.yaml"]
+
+jobs:
+  charts:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: azure/setup-helm@v4
+        with:
+          version: v3.18.4
+
+      - name: helm lint
+        run: |
+          for chart in k8s/local/charts/*/; do
+            echo "== $chart"
+            helm lint "$chart"
+          done
+
+      - name: render charts
+        run: |
+          mkdir -p /tmp/rendered
+          for chart in k8s/local/charts/*/; do
+            name=$(basename "$chart")
+            # The same two shapes the cluster can be in: a Deployment, or a
+            # Rollout with its analysis.
+            helm template "$name" "$chart" \
+              --set secret.existingSecret=ci-placeholder \
+              > "/tmp/rendered/${name}-rollout.yaml"
+            helm template "$name" "$chart" \
+              --set secret.existingSecret=ci-placeholder \
+              --set rollout.enabled=false \
+              > "/tmp/rendered/${name}-deployment.yaml"
+          done
+
+      - name: install kubeconform
+        run: |
+          curl -sSLo /tmp/kubeconform.tar.gz \
+            https://github.com/yannh/kubeconform/releases/download/v0.7.0/kubeconform-linux-amd64.tar.gz
+          tar -xzf /tmp/kubeconform.tar.gz -C /tmp kubeconform
+          sudo mv /tmp/kubeconform /usr/local/bin/
+
+      - name: validate rendered charts
+        run: |
+          kubeconform -strict -summary \
+            -kubernetes-version 1.37.0 \
+            -schema-location default \
+            -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json' \
+            /tmp/rendered/
+
+      - name: validate plain manifests
+        run: |
+          # Helm values files live next to manifests in components/, and they
+          # are not Kubernetes objects: feeding them to kubeconform would fail
+          # on every one. The convention that makes this filter work: anything
+          # that is Helm input ends in values.yaml.
+          find k8s/local/components k8s/local/gitops k8s/local/drills \
+            -name '*.yaml' ! -name '*values.yaml' -print0 \
+          | xargs -0 kubeconform -strict -summary \
+              -kubernetes-version 1.37.0 \
+              -schema-location default \
+              -schema-location 'https://raw.githubusercontent.com/datreeio/CRDs-catalog/main/{{.Group}}/{{.ResourceKind}}_{{.ResourceAPIVersion}}.json'

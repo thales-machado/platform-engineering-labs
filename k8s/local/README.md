@@ -1543,6 +1543,20 @@ Adoption order, from ADR 0018, with what makes each one awkward:
 
 `prune` stays off throughout, so a file deleted by accident cannot delete a component.
 
+#### 4.6 CI (2026-11-16)
+
+Until now nothing checked what went into this repository. Argo CD syncs whatever is on `main`, so a typo in a chart reached the cluster and was found there. [.github/workflows/validate.yaml](../../.github/workflows/validate.yaml) asks three questions before the merge instead:
+
+1. does every chart lint
+2. does it render, in both shapes the cluster can be in (`Rollout` and `Deployment`)
+3. is what it renders valid Kubernetes, including the CRDs this cluster uses
+
+The third needs schemas for `Rollout`, `Application`, `ServiceMonitor`, `Probe`, `HTTPRoute` and the rest, which `kubeconform` takes from the CRDs-catalog in addition to the built-in ones.
+
+One convention makes the manifest sweep possible: **anything that is Helm input ends in `values.yaml`**. The first version filtered on the exact name and choked on `loki-values.yaml`, `alloy-values.yaml` and `kube-prometheus-stack-values.yaml`, because three charts share the `observability` directory. Filtering on the suffix fixes it; splitting that directory per chart would be the tidier fix and is not worth the churn yet.
+
+Verified locally before the first push: 17 resources from the charts, 46 from the manifests, zero invalid.
+
 ### 5. CNI migration: Calico to Cilium
 
 Planned.
