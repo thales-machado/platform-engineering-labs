@@ -1405,6 +1405,46 @@ kubectl -n argocd get secret argocd-initial-admin-secret \
 
 Bootstrapped by hand on purpose: a tool that cannot be installed without itself is a poor first step. It gets an Application for its own values once it is healthy.
 
+The built-in `admin` cannot be renamed, so a local account `keydrop` is declared in the values with `role:admin`, and its bcrypt hash is set by hand in `argocd-secret`. The hash does not go in the values file: this repository is public.
+
+```bash
+read -rsp 'Argo CD password for keydrop: ' PW; echo
+HASH=$(htpasswd -nbBC 10 "" "$PW" | tr -d ':\n'); unset PW
+printf '{"stringData":{"accounts.keydrop.password":"%s","accounts.keydrop.passwordMtime":"%s"}}' \
+  "$HASH" "$(date -u +%Y-%m-%dT%H:%M:%SZ)" > /tmp/argo.json
+unset HASH
+kubectl -n argocd patch secret argocd-secret --patch-file /tmp/argo.json
+shred -u /tmp/argo.json
+kubectl -n argocd rollout restart deploy/argocd-server
+```
+
+#### 4.2 First Application: lab-app (2026-11-16)
+
+[gitops/lab-app.yaml](gitops/lab-app.yaml). `lab-app` goes first because it is the only workload whose breakage costs nothing.
+
+Adopting it exposed the first real GitOps problem. The chart rendered its Secret from `values.yaml`, with the real token supplied by `--set` at install time and living only inside the Helm release. Under Argo CD the chart is synced from Git, so the Secret would have been overwritten with the placeholder, and putting the token in the values file is impossible: the repository is public.
+
+The chart now takes `secret.existingSecret`, and when it is set no Secret is rendered at all. The token was copied into a Secret created by hand, without ever appearing on screen:
+
+```bash
+kubectl -n lab-app get secret lab-app -o jsonpath='{.data.API_TOKEN}' | base64 -d \
+  | kubectl -n lab-app create secret generic lab-app-token --from-file=API_TOKEN=/dev/stdin
+```
+
+That is the rule of the step stated as a problem rather than a slogan: everything Argo manages has to be fully described in Git, and secrets must not be in Git, so they are not managed by Argo.
+
+Adoption happened in place. `lab-app` was still a Helm release installed by hand, and Argo applied the same resources over it; the old `lab-app` Secret stayed behind because `prune` is off, and was deleted afterwards.
+
+**Drift test.** Changing the image directly in the cluster:
+
+```bash
+kubectl -n lab-app set image deploy/lab-app app=ghcr.io/stefanprodan/podinfo:6.16.0
+```
+
+16:29:57 the image was 6.16.0, 16:33:17 it was 6.17.0 again, with nothing done in between. `selfHeal` reverts a hand edit within the reconciliation window.
+
+Worth knowing what it would *not* revert: `replicas`. The chart omits that field when the HPA is enabled, so Git has no opinion about it and Argo has nothing to enforce. Argo CD reverts what is written down, not everything that moves.
+
 ### 5. CNI migration: Calico to Cilium
 
 Planned.
