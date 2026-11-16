@@ -1526,6 +1526,23 @@ Nothing in the cluster changes when this runs, because both sides apply the same
 
 The lesson generalises past Argo: in a cluster where two controllers apply the same objects server-side, "just run the install command again" is not a recovery plan until someone has run it.
 
+#### 4.5 App of apps (2026-11-16)
+
+[gitops/root.yaml](gitops/root.yaml) has one job: create the Applications in [gitops/apps/](gitops/apps/). Adding a component to the cluster becomes adding a file to that directory, and `root` is the only object left that a human applies.
+
+It adopted `lab-app` and `argocd` by name rather than duplicating them, and `netcheck` came up `Synced` with its pods untouched, two days old.
+
+Adoption order, from ADR 0018, with what makes each one awkward:
+
+| Wave | Components | The wrinkle |
+|---|---|---|
+| done | lab-app, netcheck, argocd | none |
+| next | metallb, cert-manager extras, dashboard | the directory holds Helm values next to manifests, so the Application needs `directory.exclude` |
+| then | observability, postgres | PVCs and a database; a wrong sync is not just a restart |
+| last | traefik, cert-manager, calico | a bad sync here takes the cluster away from you, including Argo's own route |
+
+`prune` stays off throughout, so a file deleted by accident cannot delete a component.
+
 ### 5. CNI migration: Calico to Cilium
 
 Planned.
