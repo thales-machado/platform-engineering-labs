@@ -20,6 +20,13 @@ configs:
     # Faster than the 3m default: this is a lab and drift should be visible
     # while you are still looking at the screen.
     timeout.reconciliation: 180s
+    # A local account, because the built-in admin cannot be renamed. login is
+    # the UI and CLI, apiKey allows generating tokens later for CI.
+    accounts.keydrop: apiKey, login
+  rbac:
+    # Without this the account exists and can see nothing.
+    policy.csv: |
+      g, keydrop, role:admin
 
 # No SSO. One local admin, same as the Dashboard and Grafana.
 dex:
