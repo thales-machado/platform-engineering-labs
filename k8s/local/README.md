@@ -1478,7 +1478,22 @@ It worked, and the number is the interesting part. A build failing one request i
 
 The abort was therefore a near miss rather than a clean pass. A threshold of 0.90 instead of 0.95 would have promoted a broken release. The metric now carries `initialDelay: 90s`, so the first question is not asked until the window holds only canary data.
 
-That is the value of running the drill instead of trusting the design: the mechanism worked, and the measurement behind it was wrong in a way that only showed up with a real failing build.
+**Second run**, same broken build against the delayed analysis: the first measurement failed immediately at `0.9022`, with no false `1` before it. The delay was right, the number still was not: a build failing one request in three should read far lower.
+
+Counting the actual samples over the drill answered it, and the answer was two defects rather than one:
+
+```
+root    200  1482      readyz  200   624
+metrics 200   586      healthz 200   433
+root    400    19      root    500    14      root 409   12
+```
+
+- **Probes and the scrape were in the denominator.** `readyz`, `healthz` and `metrics` came to 1643 samples against 1527 of real traffic. More than half of what the analysis measured was traffic that cannot fail, and `/metrics` was the one I had not thought of: Prometheus scraping podinfo counts as a request to podinfo.
+- **The query only counted 5xx.** The broken build returned 19 of `400` and 12 of `409` for every 14 of `500`, so two thirds of its failures were invisible. A version that rejected every request with a `400` would have passed this analysis without a mark.
+
+The query now excludes `healthz|readyz|metrics` and counts `[45]..` as failure.
+
+That is the value of running the drill instead of trusting the design. The mechanism worked on the first try; the measurement behind it was wrong twice, and both defects were the kind that make an analysis pass a release it should have stopped.
 
 ### 5. CNI migration: Calico to Cilium
 
