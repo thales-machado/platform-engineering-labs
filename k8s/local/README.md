@@ -1370,7 +1370,13 @@ Two things the drill taught, both about the tools rather than the backup:
 
 ### 3. SLI, SLO and error budget
 
-Planned.
+In progress. [ADR 0017](docs/adr/0017-slo-measured-outside-the-cluster.md), [docs/slo/lab-app.md](docs/slo/lab-app.md).
+
+The objective is 99.9% availability of `app.lab.thalespm.me/healthz` over a rolling 30 days, an error budget of 43m 12s, measured by the homelab blackbox probe and stored in VictoriaMetrics.
+
+Two constraints decided that before any target was picked: in-cluster Prometheus keeps 7 days, and a measurement taken inside the cluster records nothing during an outage of the cluster, which is exactly when the budget should be spent. PM-0006 would have looked like a perfect month.
+
+The target came from the data rather than from preference. The service had done 100% over 7 days including a full node drain, so 99% would be unfailable; 99.99% is 4m 19s a month, less than one restart of the single-replica Traefik, and an SLO that normal maintenance breaks teaches people to ignore it.
 
 ### 4. GitOps and progressive delivery
 
