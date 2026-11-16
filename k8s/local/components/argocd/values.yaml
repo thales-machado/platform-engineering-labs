@@ -1,0 +1,73 @@
+# argo-cd 10.18.0 (app v3.6.1), namespace argocd. ADR 0018.
+#
+# Installed by hand first and given an Application for itself afterwards: a
+# tool that cannot be installed without itself is a poor first step.
+#
+# Everything is pinned to urahara. zangetsu (7.9 GiB, arm64) keeps running only
+# the DaemonSets.
+
+global:
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+
+configs:
+  params:
+    # TLS is terminated at the shared Gateway, so the server speaks plain HTTP
+    # inside the cluster. Without this it redirects to HTTPS forever behind a
+    # proxy that already did TLS.
+    server.insecure: true
+  cm:
+    # Faster than the 3m default: this is a lab and drift should be visible
+    # while you are still looking at the screen.
+    timeout.reconciliation: 180s
+
+# No SSO. One local admin, same as the Dashboard and Grafana.
+dex:
+  enabled: false
+
+# Single node, no HA: one Redis, one of each controller.
+redis-ha:
+  enabled: false
+
+controller:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 512Mi
+    limits:
+      memory: 1Gi
+
+server:
+  replicas: 1
+  # Routing comes from the shared Gateway (route.yaml), as with Grafana and
+  # the Dashboard.
+  ingress:
+    enabled: false
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+repoServer:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 50m
+      memory: 256Mi
+    limits:
+      memory: 512Mi
+
+applicationSet:
+  replicas: 1
+  resources:
+    requests:
+      cpu: 20m
+      memory: 128Mi
+    limits:
+      memory: 256Mi
+
+notifications:
+  enabled: false

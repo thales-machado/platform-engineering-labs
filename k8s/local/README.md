@@ -1386,7 +1386,24 @@ The test also found a bug in the dashboard. "Budget spent" read 36.6 minutes for
 
 ### 4. GitOps and progressive delivery
 
-Planned.
+In progress. [ADR 0018](docs/adr/0018-gitops-with-argo-cd.md).
+
+Argo CD 10.18.0 (v3.6.1) and Argo Rollouts 2.43.12 (v1.10.2). The risky part of this step is not the install, it is what happens to the twelve components already installed by hand, so adoption is one component at a time, starting with the workload whose breakage costs nothing.
+
+#### 4.1 Argo CD, installed by hand
+
+```bash
+helm repo add argo https://argoproj.github.io/argo-helm
+helm repo update argo
+helm upgrade --install argocd argo/argo-cd \
+  --version 10.18.0 -n argocd --create-namespace \
+  -f components/argocd/values.yaml
+kubectl apply -f components/argocd/route.yaml
+kubectl -n argocd get secret argocd-initial-admin-secret \
+  -o jsonpath='{.data.password}' | base64 -d; echo
+```
+
+Bootstrapped by hand on purpose: a tool that cannot be installed without itself is a poor first step. It gets an Application for its own values once it is healthy.
 
 ### 5. CNI migration: Calico to Cilium
 

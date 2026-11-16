@@ -1,0 +1,21 @@
+# argocd.lab.thalespm.me through the shared Gateway, same pattern as Grafana
+# and the Dashboard: TLS and routing belong to Traefik, the chart's own ingress
+# stays off, and the server runs with server.insecure so it does not redirect
+# to HTTPS behind a proxy that already terminated it.
+#
+# The Pi-hole wildcard for *.lab.thalespm.me already resolves this name.
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: argocd
+  namespace: argocd
+spec:
+  parentRefs:
+    - name: lab-gateway
+      namespace: traefik
+  hostnames:
+    - argocd.lab.thalespm.me
+  rules:
+    - backendRefs:
+        - name: argocd-server
+          port: 80
