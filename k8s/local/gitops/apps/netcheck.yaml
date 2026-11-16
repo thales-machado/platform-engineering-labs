@@ -1,0 +1,20 @@
+# The pod-to-pod probe from PM-0003. Plain manifests, no state, no chart:
+# the simplest thing to adopt after lab-app, and nothing depends on it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: netcheck
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/components/netcheck
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-obs
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false

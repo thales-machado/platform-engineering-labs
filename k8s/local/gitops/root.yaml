@@ -1,0 +1,27 @@
+# App of apps. This Application has one job: create the Applications in
+# gitops/apps/. Adding a component to the cluster becomes adding a file to that
+# directory, and this is the only object that still has to be applied by hand.
+#
+# It adopts the Applications already applied by hand (lab-app, argocd): same
+# name, same namespace, so Argo takes them over rather than duplicating them.
+#
+# prune stays off here too. A file deleted from gitops/apps/ by accident would
+# otherwise delete a whole component on the next sync.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: root
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/gitops/apps
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: argocd
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
