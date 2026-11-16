@@ -18,5 +18,11 @@ spec:
     matchLabels:
       app.kubernetes.io/instance: cert-manager
   endpoints:
+    # The three Services do not agree on the port name: the controller and the
+    # cainjector call it http-metrics, the webhook calls it metrics. A
+    # ServiceMonitor matches by name, so both are listed; an endpoint whose
+    # name a Service does not have is simply skipped.
     - port: http-metrics
+      interval: 60s
+    - port: metrics
       interval: 60s
