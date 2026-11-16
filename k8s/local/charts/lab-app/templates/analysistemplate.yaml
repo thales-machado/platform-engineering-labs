@@ -7,6 +7,12 @@
   failureLimit 0 means one bad measurement aborts and the Rollout scales the
   canary back to zero on its own.
 
+  Probe paths are excluded. podinfo counts every request, and the kubelet hits
+  readyz every 5s and healthz every 10s on each pod. Those always succeed and
+  never stop, so they pad the denominator with guaranteed-good samples: in the
+  drill of 2026-11-16 a build failing one request in three measured 0.90
+  instead of 0.67. The quieter the real traffic, the more they hide.
+
   With little traffic the query returns nothing and the measurement is
   Inconclusive rather than failed, which pauses instead of promoting. That is
   the safe direction, and it is why the drill generates load.
@@ -37,9 +43,11 @@ spec:
             sum(rate(http_request_duration_seconds_count{
               namespace="{{ .Release.Namespace }}",
               service="{{ include "lab-app.fullname" . }}-canary",
+              path!~"healthz|readyz",
               status!~"5.."}[1m]))
             /
             sum(rate(http_request_duration_seconds_count{
               namespace="{{ .Release.Namespace }}",
-              service="{{ include "lab-app.fullname" . }}-canary"}[1m]))
+              service="{{ include "lab-app.fullname" . }}-canary",
+              path!~"healthz|readyz"}[1m]))
 {{- end }}

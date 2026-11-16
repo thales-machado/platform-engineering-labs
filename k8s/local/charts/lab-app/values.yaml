@@ -28,10 +28,7 @@ serviceMonitor:
 
 # Extra flags for podinfo. Used in step 4 to ship a version that fails on
 # purpose, so the canary analysis has something real to reject.
-extraArgs:
-  # DRILL 2026-11-16, second run: same broken build, now that the analysis
-  # waits 90s before its first measurement. Expected around 0.67, not 0.948.
-  - "--random-error=true"
+extraArgs: []
 
 # Step 4: progressive delivery. With this off the chart renders a plain
 # Deployment, so it still works on a cluster without Argo Rollouts.
