@@ -20,6 +20,12 @@ metadata:
 spec:
   metrics:
     - name: success-rate
+      # The first measurement must not start until rate([1m]) contains only
+      # canary samples. Until the canary pod exists, the canary Service points
+      # at the stable pods, and their healthy traffic stays inside the window:
+      # in the drill of 2026-11-16 that read 0.948 for a build whose real
+      # success rate was 0.67, which is a near miss, not a pass.
+      initialDelay: 90s
       interval: 30s
       count: 3
       successCondition: result[0] >= {{ .Values.rollout.successRate }}
