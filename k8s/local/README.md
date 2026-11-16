@@ -1250,6 +1250,8 @@ Eight rules, all with the label `shortname: K8SLAB`, all delivered to WhatsApp t
 | calico-node restarting | restarts in `calico-system` in 30min | > 2 for 5m | PM-0002 |
 | LoadBalancer IP not announced | `sum(metallb_speaker_announced) or vector(0)` | < 1 for 5m | PM-0005 |
 | Cross-node traffic failing | `min(probe_success{path="cross-node"})` | < 1 for 3m | PM-0003 |
+| Certificate expiring | `(certmanager_certificate_expiration_timestamp_seconds - time()) / 86400` | < 15 days | 2.6 drill |
+| Pod restarting repeatedly | `increase(kube_pod_container_status_restarts_total[1h])` per pod | > 5 for 15m | PM-0001 |
 
 Two of them needed something built before a rule was possible.
 
@@ -1310,6 +1312,19 @@ Three things went wrong while building it, and all three are worth keeping:
 - `crictl` was installed on urahara during PM-0006 and never on zangetsu, which is why that was found at all.
 
 What this does not do: it detects corruption and accidental drift, not tampering. Anything that can rewrite the binary can rewrite the baseline next to it. Verifying the extracted file against the image layer it came from would close that, and it stays open.
+
+#### 2.7 Drill: add a component to monitoring without docs (2026-11-16)
+
+A timed exercise from [lab-standard.md](../../../resume-driven-development/perfil/gaps/lab-standard.md): get cert-manager into the stack from memory. It had been issuing certificates since step 1 with nothing scraping it, so a wildcard that failed to renew would have broken every site silently.
+
+[components/cert-manager/servicemonitor.yaml](components/cert-manager/servicemonitor.yaml). Two things the drill surfaced that reading the docs would have hidden:
+
+- The three cert-manager Services do not agree on the port name. The controller and the cainjector call it `http-metrics`, the webhook calls it `metrics`, and a ServiceMonitor matches by name, so the first version scraped two of three. An endpoint naming a port a Service does not have is skipped silently, which is why listing both is safe.
+- `cert-manager-cainjector` showed **491 restarts**, and none of the ten rules had noticed. The last restart was 2026-11-12 19:42 with `TLS handshake timeout` to the API server: the cainjector exits rather than retrying when the API server is unreachable, so those restarts are a fossil of PM-0006. For 41 hours that pod was crashing every few seconds and the cluster said nothing.
+
+That shaped the new rule: a restart **counter** is history, only the **rate** describes now. `increase(...[1h]) > 5` stays quiet today and would have been screaming during the outage. Written as a total it would fire forever on this pod and teach you to ignore it.
+
+Result: `certmanager_certificate_expiration_timestamp_seconds` shows `lab-wildcard` expiring 2027-02-04, 80 days out, and two new rules watch it and the restart rate.
 
 #### 2.6 Drills
 

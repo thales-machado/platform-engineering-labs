@@ -78,6 +78,7 @@ One wrong step also cost a round: removing the image and pulling it again looked
 |---|---|---|
 | External blackbox probe on the API server's `/readyz` and on the app, alerting in 2 minutes, from the homelab stack and not from inside the cluster | step 2.2, [monitoring/external/](../../monitoring/external/) | done (2026-11-11), verified by stopping the API server for 3 minutes |
 | Alert on restarts of control plane static pods, etcd included | step 2.4, rule `k8s-lab-control-plane-restart` | done (2026-11-14) |
+| Alert on any pod restarting repeatedly, not only on CrashLoopBackOff | step 2.7, rule `k8s-lab-pod-restarting` | done (2026-11-16): cert-manager-cainjector restarted 491 times during this outage and nothing noticed, because a pod that crashes and recovers never reaches CrashLoopBackOff |
 | Weekly integrity check of unpacked image layers | step 2.5, [scripts/check-image-binaries.sh](../../scripts/check-image-binaries.sh) | done (2026-11-14): 6 binaries on urahara, 2 on zangetsu, alerting from the homelab |
 | memtest on urahara: SMART is clean (0 media errors, 3% used), so unbuffered RAM is the remaining suspect | host | open |
 | Check SMART and media errors on urahara's NVMe | host | done (2026-11-11): clean, 0 media errors, 0 log entries, 3% used, 51 C |
