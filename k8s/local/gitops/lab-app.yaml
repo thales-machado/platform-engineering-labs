@@ -1,0 +1,34 @@
+# First Application under Argo CD (ADR 0018). lab-app goes first because it is
+# the only workload whose breakage costs nothing.
+#
+# The token is not here. The chart points at a Secret created by hand
+# (secret.existingSecret), because this repository is public and anything Argo
+# manages has to be fully described in Git.
+#
+# selfHeal is on: a manual `helm upgrade` or `kubectl edit` against this app is
+# reverted within three minutes. prune is off until the repository has been the
+# source of truth long enough to trust a deletion in Git.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: lab-app
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/charts/lab-app
+    helm:
+      values: |
+        secret:
+          existingSecret: lab-app-token
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-app
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=false

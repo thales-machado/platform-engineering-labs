@@ -11,9 +11,14 @@ ui:
   message: "Hello from the k8s/local lab"
   color: "#2f6f73"
 
-# Demo secret, rendered into a Secret and read as an env var. Never commit a real value:
-# override at install time with --set secret.apiToken=...
+# Demo secret, read as an env var. Two ways to provide it:
+#   existingSecret: the name of a Secret created outside the chart, which is
+#     what Argo CD needs (ADR 0018): a token rendered from values would live in
+#     a public repository.
+#   apiToken: rendered into a Secret by the chart. Only for a hand-installed
+#     release, overridden with --set, never committed.
 secret:
+  existingSecret: ""
   apiToken: "change-me"
 
 # podinfo writes a line per HTTP request only at debug. At info it is silent
