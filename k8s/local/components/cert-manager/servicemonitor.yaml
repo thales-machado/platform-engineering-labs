@@ -1,0 +1,22 @@
+# cert-manager has been issuing certificates since step 1 and nothing scraped
+# it, so a wildcard that fails to renew would break every site silently.
+#
+# The chart can create a ServiceMonitor (prometheus.servicemonitor.enabled),
+# but only for the controller. All three Services expose the same port name on
+# 9402 and share app.kubernetes.io/instance=cert-manager, so one object written
+# here covers the controller, the webhook and the cainjector.
+#
+# A ServiceMonitor says which Services to scrape by label and which port by
+# NAME, never by number, and by default only looks in its own namespace.
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: cert-manager
+  namespace: cert-manager
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/instance: cert-manager
+  endpoints:
+    - port: http-metrics
+      interval: 60s
