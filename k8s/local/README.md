@@ -1495,6 +1495,37 @@ The query now excludes `healthz|readyz|metrics` and counts `[45]..` as failure.
 
 That is the value of running the drill instead of trusting the design. The mechanism worked on the first try; the measurement behind it was wrong twice, and both defects were the kind that make an analysis pass a release it should have stopped.
 
+#### 4.4 Argo CD manages itself (2026-11-16)
+
+[gitops/argocd.yaml](gitops/argocd.yaml), a multi-source Application: the chart comes from the Helm repository, its values from this one, referenced as `$values`. `ServerSideApply=true` is required, because the ApplicationSet CRD is larger than the 262144-byte annotation that client-side apply writes.
+
+The obvious question is what happens when a bad sync breaks the thing that performs syncs. The answer in the README was the bootstrap command, and testing it showed that **the answer was wrong**:
+
+```
+Error: UPGRADE FAILED: conflict occurred while applying object
+argocd/argocd-application-controller ... conflict with "argocd-controller": .spec.ingress
+```
+
+Once Argo CD owns those objects through server-side apply as the field manager `argocd-controller`, the API server refuses a plain `helm upgrade`. The escape hatch would have failed at the exact moment it was needed.
+
+`--take-ownership` does not fix it either, which was the second wrong guess. The two flags sound interchangeable and are not:
+
+| Flag | What it claims |
+|---|---|
+| `--take-ownership` | Helm's own release metadata: adopt a resource no release claims |
+| `--force-conflicts` | the API server's field ownership: take fields another manager owns |
+
+Argo claims fields, not Helm metadata, so only the second applies. The verified recovery, run on 2026-11-16 and confirmed by `helm list` showing `deployed` and the UI answering 200:
+
+```bash
+helm upgrade --install argocd argo/argo-cd --version 10.18.0 \
+  -n argocd -f components/argocd/values.yaml --force-conflicts
+```
+
+Nothing in the cluster changes when this runs, because both sides apply the same values file. What changes is who the API server records as the owner of the fields, and Argo takes them back at its next sync.
+
+The lesson generalises past Argo: in a cluster where two controllers apply the same objects server-side, "just run the install command again" is not a recovery plan until someone has run it.
+
 ### 5. CNI migration: Calico to Cilium
 
 Planned.
