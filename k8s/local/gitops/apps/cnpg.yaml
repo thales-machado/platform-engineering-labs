@@ -1,0 +1,27 @@
+# The operator, installed with chart defaults in step 1: there is no values
+# file for it, so this Application has none either. The database itself is a
+# separate Application (postgres), which is the right split: the operator can
+# be upgraded without touching the cluster it manages.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cnpg
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://cloudnative-pg.github.io/charts
+      chart: cloudnative-pg
+      targetRevision: 0.29.1
+    - repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cnpg-system
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=false

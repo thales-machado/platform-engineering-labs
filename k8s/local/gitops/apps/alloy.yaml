@@ -1,0 +1,28 @@
+# The log agent, a DaemonSet on both nodes. The only component of the
+# observability stack that runs on zangetsu.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: alloy
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: alloy
+      targetRevision: 1.15.0
+      helm:
+        valueFiles:
+          - $values/k8s/local/components/observability/alloy-values.yaml
+    - repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-obs
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=false

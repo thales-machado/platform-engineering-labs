@@ -1,0 +1,27 @@
+# SingleBinary with a local-path volume on urahara, 7 day retention.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: loki
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://grafana.github.io/helm-charts
+      chart: loki
+      targetRevision: 7.6.0
+      helm:
+        valueFiles:
+          - $values/k8s/local/components/observability/loki-values.yaml
+    - repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-obs
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=false

@@ -1,0 +1,24 @@
+# The CloudNativePG Cluster: two instances, a primary and a streaming
+# standby, each on local-path storage bound to its node.
+#
+# The drill writer that inserts a row per second moved to drills/: a bare Pod
+# under selfHeal would be recreated every time it is deleted, which is the
+# opposite of what a drill tool should do.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: postgres
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/components/postgres
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-db
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false

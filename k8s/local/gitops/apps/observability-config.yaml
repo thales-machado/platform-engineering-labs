@@ -1,0 +1,26 @@
+# The Grafana and Prometheus routes. Three charts share this directory, so
+# their values files are named <chart>-values.yaml and the exclude pattern is
+# a glob rather than a name.
+#
+# The basic-auth Secret for the Prometheus route is not here: it is created by
+# hand, like every secret in this lab.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: observability-config
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/components/observability
+    directory:
+      exclude: '*values.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-obs
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false

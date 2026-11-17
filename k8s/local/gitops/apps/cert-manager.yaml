@@ -1,0 +1,33 @@
+# Installed in step 1 from the OCI registry at quay.io. The Application uses
+# the classic repository at charts.jetstack.io instead, same chart and same
+# version: an OCI source needs the repository registered in Argo CD with OCI
+# enabled, which is one more piece of state outside Git for no gain here.
+#
+# Its ClusterIssuers and Certificate live in cert-manager-config: a directory
+# source cannot render a chart.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://charts.jetstack.io
+      chart: cert-manager
+      targetRevision: v1.21.3
+      helm:
+        valueFiles:
+          - $values/k8s/local/components/cert-manager/values.yaml
+    - repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=false

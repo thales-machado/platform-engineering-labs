@@ -1,0 +1,34 @@
+# ServerSideApply is required: this chart ships the Prometheus Operator CRDs,
+# several of which are larger than the 262144-byte last-applied-configuration
+# annotation that client-side apply writes. Same reason as Argo CD itself.
+#
+# This Application owns Prometheus and Grafana, both with PVCs on urahara. A
+# bad sync here is not a restart, which is why it is in the third wave and not
+# the first.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: kube-prometheus-stack
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://prometheus-community.github.io/helm-charts
+      chart: kube-prometheus-stack
+      targetRevision: 93.2.2
+      helm:
+        valueFiles:
+          - $values/k8s/local/components/observability/kube-prometheus-stack-values.yaml
+    - repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: lab-obs
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - ServerSideApply=true
+      - CreateNamespace=false

@@ -1,0 +1,29 @@
+# The chart is from the retired repository, which is where it moved when the
+# project was archived. Pinned, like everything else here: targetRevision
+# without a version would upgrade the cluster the day a new chart is published.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashboard
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://kubernetes-retired.github.io/dashboard/
+      chart: kubernetes-dashboard
+      targetRevision: 7.14.0
+      helm:
+        valueFiles:
+          - $values/k8s/local/components/dashboard/values.yaml
+    - repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kubernetes-dashboard
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=false

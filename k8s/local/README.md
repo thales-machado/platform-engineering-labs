@@ -969,10 +969,10 @@ kubectl cnpg status lab-pg -n lab-db
 
 Result: PostgreSQL `18.6` (image `ghcr.io/cloudnative-pg/postgresql:18.6-system-trixie`), `Cluster in healthy state`. Primary `lab-pg-1` on urahara, standby `lab-pg-2` on zangetsu, each with its own `Bound` PVC. Streaming replication, asynchronous, with a replication slot; zero lag. No continuous backup configured yet.
 
-Failover drill: [components/postgres/writer.yaml](components/postgres/writer.yaml) inserts one row per second through the read-write Service (`lab-pg-rw`, always the current primary), with the URI from the operator-generated Secret. Kill the primary while it writes:
+Failover drill: [drills/pg-writer.yaml](drills/pg-writer.yaml) inserts one row per second through the read-write Service (`lab-pg-rw`, always the current primary), with the URI from the operator-generated Secret. Kill the primary while it writes:
 
 ```bash
-kubectl apply -f components/postgres/writer.yaml
+kubectl apply -f drills/pg-writer.yaml
 kubectl -n lab-db logs -f pg-writer           # wait for steady "ok" lines
 kubectl -n lab-db delete pod <primary-pod>    # second terminal
 kubectl cnpg status lab-pg -n lab-db
@@ -1328,7 +1328,7 @@ Result: `certmanager_certificate_expiration_timestamp_seconds` shows `lab-wildca
 
 #### 2.6 Drills
 
-**Drain a node while the database is being written to (2026-11-14).** [components/postgres/writer.yaml](components/postgres/writer.yaml) inserts one row per second through `lab-pg-rw` and records `inet_server_addr()`, so the switchover is visible in the data and not only in the logs.
+**Drain a node while the database is being written to (2026-11-14).** [drills/pg-writer.yaml](drills/pg-writer.yaml) inserts one row per second through `lab-pg-rw` and records `inet_server_addr()`, so the switchover is visible in the data and not only in the logs.
 
 zangetsu is the node to drain, not urahara: Prometheus, Grafana and Loki are pinned to urahara with `local-path` volumes, which are node-bound, so draining urahara would leave them Pending and blind the dashboards the drill is meant to be watched on. The primary was moved to zangetsu first with `kubectl cnpg promote`, which cost 9 seconds of writes.
 
