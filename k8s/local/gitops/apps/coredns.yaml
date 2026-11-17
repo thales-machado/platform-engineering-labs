@@ -1,0 +1,21 @@
+# CoreDNS's Corefile. kubeadm created it and still owns it across upgrades;
+# this Application keeps the lab's stub zone in place. prune stays false, so
+# Argo never deletes the ConfigMap the cluster's DNS depends on.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: coredns
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/components/coredns
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kube-system
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false

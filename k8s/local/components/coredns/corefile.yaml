@@ -1,0 +1,59 @@
+# CoreDNS's Corefile, as kubeadm generates it, plus one stub zone.
+#
+# The lab's hostnames exist only in Pi-hole (split horizon, no public A
+# record). Both nodes list two resolvers in /etc/resolv.conf:
+#
+#   nameserver 192.168.15.248   Pi-hole VIP, keepalived
+#   nameserver 1.1.1.1
+#
+# "forward . /etc/resolv.conf" spreads queries across both, so about half the
+# lookups for *.lab.thalespm.me reached Cloudflare and came back NXDOMAIN.
+# From inside the cluster every lab hostname worked roughly half the time,
+# while curl from a node always worked, because the node asks Pi-hole first
+# and only falls through on failure. Found 2026-11-17 by the probes added for
+# PM-0008.
+#
+# The stub zone sends thalespm.me to Pi-hole alone and leaves everything else
+# on the default path. Pi-hole resolves the public names of that domain
+# upstream, so this costs nothing for names that are not in the split horizon.
+#
+# kubeadm owns this ConfigMap. "kubeadm upgrade" rewrites it and keeps a
+# backup as coredns-backup-v<version>. With Argo managing it and selfHeal on,
+# the stub zone comes back within three minutes of an upgrade, which is the
+# behaviour we want, but it means an upgrade and Argo briefly disagree. Worth
+# remembering during step 1 work.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: coredns
+  namespace: kube-system
+data:
+  Corefile: |
+    thalespm.me:53 {
+        errors
+        cache 30
+        forward . 192.168.15.248
+    }
+    .:53 {
+        errors
+        health {
+           lameduck 5s
+        }
+        ready
+        kubernetes cluster.local in-addr.arpa ip6.arpa {
+           pods insecure
+           fallthrough in-addr.arpa ip6.arpa
+           ttl 30
+        }
+        prometheus :9153
+        forward . /etc/resolv.conf {
+           max_concurrent 1000
+        }
+        cache 30 {
+           disable success cluster.local
+           disable denial cluster.local
+        }
+        loop
+        reload
+        loadbalance
+    }
