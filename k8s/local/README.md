@@ -1543,6 +1543,17 @@ Adoption order, from ADR 0018, with what makes each one awkward:
 
 `prune` stays off throughout, so a file deleted by accident cannot delete a component.
 
+Waves 2 and 3 ran on 2026-11-16 and brought every component except Traefik and Calico under Argo CD: seventeen Applications, all `Synced` and `Healthy`, nothing recreated, the PVCs and the database untouched.
+
+Four things failed quietly along the way, and each one reported success somewhere:
+
+- **Placeholders applied as desired state.** [PM-0007](docs/postmortems/0007-placeholders-applied-by-gitops.md). The ClusterIssuers took the literal `<ACME_EMAIL>` and reported `Synced`.
+- **A chart adopted under the wrong release name.** Helm names resources after the release, Argo uses the Application name unless told otherwise, and the Dashboard release is `kubernetes-dashboard` while the Application was `dashboard`. Argo built a complete parallel copy of the chart, every pod `Healthy`, serving nothing. `prune: false` is what kept this from being a deletion instead.
+- **A CRD field pruned in silence.** `releaseName` belongs under `helm:`, not on the source. At the wrong level the Application CRD's schema drops it at admission, the sync reports success, and the duplicate comes back on the next `selfHeal`. Three cycles of deleting pods before the manifest was read carefully enough.
+- **An annotation left by a previous tool.** `cnpg` kept failing with `metadata.annotations: Too long` even with `ServerSideApply=true`, because the CRDs still carried a `last-applied-configuration` annotation written by the original `helm install`. Server-side apply does not write it, but the API server still validates the object as a whole. Removing it once is permanent.
+
+The common shape is worth stating once: **`Synced` means the cluster matches Git. It says nothing about whether Git says what you meant.**
+
 #### 4.6 CI (2026-11-16)
 
 Until now nothing checked what went into this repository. Argo CD syncs whatever is on `main`, so a typo in a chart reached the cluster and was found there. [.github/workflows/validate.yaml](../../.github/workflows/validate.yaml) asks three questions before the merge instead:
