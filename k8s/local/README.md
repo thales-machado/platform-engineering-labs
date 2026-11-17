@@ -45,7 +45,7 @@ Commands run from `k8s/local`.
 | 1 | Cluster and workloads | done |
 | 2 | Observability | done |
 | 3 | SLI, SLO and error budget | planned |
-| 4 | GitOps and progressive delivery | planned |
+| 4 | GitOps and progressive delivery | done |
 | 5 | CNI migration: Calico to Cilium | planned |
 
 ### 0. Diagram
@@ -1386,7 +1386,7 @@ The test also found a bug in the dashboard. "Budget spent" read 36.6 minutes for
 
 ### 4. GitOps and progressive delivery
 
-In progress. [ADR 0018](docs/adr/0018-gitops-with-argo-cd.md).
+Done (2026-11-16). [ADR 0018](docs/adr/0018-gitops-with-argo-cd.md).
 
 Argo CD 10.18.0 (v3.6.1) and Argo Rollouts 2.43.12 (v1.10.2). The risky part of this step is not the install, it is what happens to the twelve components already installed by hand, so adoption is one component at a time, starting with the workload whose breakage costs nothing.
 
@@ -1494,6 +1494,16 @@ root    400    19      root    500    14      root 409   12
 The query now excludes `healthz|readyz|metrics` and counts `[45]..` as failure.
 
 That is the value of running the drill instead of trusting the design. The mechanism worked on the first try; the measurement behind it was wrong twice, and both defects were the kind that make an analysis pass a release it should have stopped.
+
+**Third run**, same broken build against the corrected query: `0.7805`, failed on the first measurement. The three runs show each fix moving the number:
+
+| Run | Query | Measured | Margin under the 0.95 threshold |
+|---|---|---|---|
+| 1 | 1m window starting before the canary existed | 0.948 | 0.002 |
+| 2 | plus `initialDelay: 90s` | 0.902 | 0.048 |
+| 3 | plus probe and scrape paths excluded, 4xx counted as failure | 0.780 | 0.170 |
+
+Still above the 0.67 that one-in-three failures implies, which is within what a one-minute window at this traffic can explain, and far enough under the threshold that the decision is no longer a coin flip. Run 1 aborted by two thousandths; run 3 aborts with room.
 
 #### 4.4 Argo CD manages itself (2026-11-16)
 
