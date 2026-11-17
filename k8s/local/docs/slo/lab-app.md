@@ -66,6 +66,9 @@ This is a lab, so there is no release freeze to trigger. The policy is narrower 
 - A network failure between the homelab host and the cluster is recorded as the service being down. One prober, one path.
 - `/healthz` does not touch PostgreSQL, so a broken database is invisible here.
 - The probe runs on the LAN, so it says nothing about reachability from outside the house.
+- Only `app.lab.thalespm.me` is probed. Every other hostname of the lab
+  (Grafana, Prometheus, Argo CD, the dashboard, Rollouts) can return 404 or 503
+  with nothing noticing, which is how PM-0008 went unreported for five minutes.
 
 ## History
 
