@@ -24,4 +24,8 @@ spec:
       selfHeal: true
       prune: false
     syncOptions:
+      # The Cluster and Pooler CRDs are larger than the 262144-byte
+      # last-applied-configuration annotation of client-side apply, and the
+      # sync failed on both. Same reason as Argo CD and kube-prometheus-stack.
+      - ServerSideApply=true
       - CreateNamespace=false

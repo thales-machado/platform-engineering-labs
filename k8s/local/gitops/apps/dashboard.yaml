@@ -12,6 +12,11 @@ spec:
     - repoURL: https://kubernetes-retired.github.io/dashboard/
       chart: kubernetes-dashboard
       targetRevision: 7.14.0
+      # Helm names every resource after the release, and the release installed
+      # in step 2.1 is kubernetes-dashboard. Without this Argo uses the
+      # Application name and renders a parallel copy of the whole chart called
+      # dashboard-*, instead of adopting what is already running.
+      releaseName: kubernetes-dashboard
       helm:
         valueFiles:
           - $values/k8s/local/components/dashboard/values.yaml
