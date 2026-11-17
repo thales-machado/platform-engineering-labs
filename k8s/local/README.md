@@ -1642,6 +1642,35 @@ hostname, so a dead route on any of the other five is invisible. A planned
 reboot found a monitoring gap that an unplanned one would have found at a worse
 hour.
 
+**Phase 4, 2026-11-17.** Calico removed: Installation, workloads, 31 CRDs and
+both namespaces. Cilium took the CNI directory over, and `/etc/cni/net.d` now
+holds one file on each node. Hubble and its UI are up, and Argo CD has
+automated sync on all 19 Applications again.
+
+The removal was messier than the migration, and for one reason: Calico is
+installed through an operator, so the operator is what deletes it. Deleting
+both together, as the first version of the runbook said to, leaves the
+Installation in `Terminating` with two finalizers and nobody to process them.
+Three more finalizers surfaced after that, the last two on ServiceAccounts
+carrying `tigera.io/cni-protector`. A controller's finalizers outlive the
+controller, which is obvious in hindsight and was not obvious at 00:20.
+
+Phase 4 also produced PM-0009, and that one is worth reading before copying
+anything here into a cluster of your own. Pods on zangetsu had no internet
+egress for ten hours, because Cilium masquerades with iptables and tailscaled
+owns those tables there in native nftables mode, forced by the homelab because
+the Raspberry Pi kernel has no legacy `ip_tables`. Three of four netfilter
+tables were unreadable to `iptables-nft`, so Cilium installed no masquerade
+rules and every packet leaving a pod on that node went out with an unroutable
+source address.
+
+Nothing alerted. The lab probes pod-to-pod traffic and one hostname from
+outside, and neither touches pod-to-internet egress. It was found because Argo
+showed one Application Degraded, and the degraded thing was cert-manager
+failing to reach Let's Encrypt. The workaround is a `nodeSelector`; the fix is
+`bpf.masquerade`, which needs kube-proxy replacement and is now the next phase
+with a reason attached rather than a nice-to-have.
+
 Two things this step forces into the open. Argo CD has to be paused: it manages `calico` with `selfHeal`, and a controller that reverts changes is the opposite of what a migration needs. And `local-path` volumes are node-bound, so rebooting urahara takes down the control plane, Argo CD, the whole observability stack and the Postgres primary at once, with nowhere for them to go until the node is back. That is the first time the error budget from step 3 gets spent on purpose.
 
 ## Postmortems

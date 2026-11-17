@@ -1,6 +1,6 @@
 # 0019. Calico to Cilium, live, one node at a time
 
-- Status: accepted
+- Status: implemented 2026-11-17 (phases 1 to 4; kube-proxy replacement and L2 announcements still open)
 - Date: 2026-11-16
 
 ## Context
