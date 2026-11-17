@@ -7,3 +7,20 @@ crds:
 extraArgs:
   - --dns01-recursive-nameservers-only
   - --dns01-recursive-nameservers=1.1.1.1:53,8.8.8.8:53
+
+# Pinned to urahara: pods on zangetsu have no internet egress. tailscaled runs
+# there in native nftables mode (forced, the RPi kernel has no legacy
+# ip_tables), which leaves the nat, mangle and filter tables unreadable to
+# Cilium's iptables-nft, so Cilium installs no masquerade rules on that node.
+# cert-manager is the only workload here that calls out to the internet.
+#
+# This is a workaround with a date on it. The fix is bpf.masquerade, which
+# needs kube-proxy replacement, a phase of its own. See PM-0009.
+nodeSelector:
+  kubernetes.io/hostname: urahara
+webhook:
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+cainjector:
+  nodeSelector:
+    kubernetes.io/hostname: urahara
