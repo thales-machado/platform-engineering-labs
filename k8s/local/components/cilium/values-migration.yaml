@@ -1,0 +1,49 @@
+# Cilium 1.20.4 in secondary mode, alongside Calico. ADR 0019.
+#
+# Every value here exists to keep Cilium from touching the network until a node
+# is explicitly labelled. Installing this changes nothing: the proof is
+# "0 pods managed by Cilium" right after the install.
+#
+# Replaced by values.yaml in phase 4.
+
+operator:
+  replicas: 1
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  # The operator must not restart pods that Calico still manages.
+  unmanagedPodWatcher:
+    restart: false
+
+# GENEVE, because Calico holds VXLAN on 4789 and two overlays cannot share an
+# encapsulation port.
+routingMode: tunnel
+tunnelProtocol: geneve
+tunnelPort: 6081
+
+ipam:
+  mode: cluster-pool
+  operator:
+    # Must not overlap Calico's 10.244.0.0/16.
+    clusterPoolIPv4PodCIDRList:
+      - 10.245.0.0/16
+    clusterPoolIPv4MaskSize: 24
+
+cni:
+  # Write no CNI config until the per-node config says so.
+  customConf: true
+  uninstall: false
+
+# Off during the migration: with both CNIs live, enforcing policy drops traffic
+# from pods Calico still manages.
+policyEnforcementMode: never
+
+bpf:
+  # So the two dataplanes can route to each other.
+  hostLegacyRouting: true
+
+# kube-proxy stays. Replacing it is phase 3, a separate change with its own
+# failure mode.
+kubeProxyReplacement: false
+
+hubble:
+  enabled: false

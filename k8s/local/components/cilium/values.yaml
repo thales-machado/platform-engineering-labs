@@ -1,0 +1,49 @@
+# Cilium 1.20.4 after the migration, Calico gone. ADR 0019, phase 4.
+#
+# The difference from values-migration.yaml is the whole point: Cilium now owns
+# the CNI config, enforces policy, and the operator may restart pods it finds
+# unmanaged.
+
+operator:
+  replicas: 1
+  nodeSelector:
+    kubernetes.io/hostname: urahara
+  unmanagedPodWatcher:
+    restart: true
+
+routingMode: tunnel
+tunnelProtocol: geneve
+tunnelPort: 6081
+
+ipam:
+  mode: cluster-pool
+  operator:
+    clusterPoolIPv4PodCIDRList:
+      - 10.245.0.0/16
+    clusterPoolIPv4MaskSize: 24
+
+cni:
+  # Cilium is the CNI now.
+  customConf: false
+  exclusive: true
+
+policyEnforcementMode: default
+
+bpf:
+  # Kept true for now. Switching to eBPF host routing interrupts each node
+  # briefly, so it is a change of its own, not a side effect of cleanup.
+  hostLegacyRouting: true
+
+kubeProxyReplacement: false
+
+# Flow visibility, the reason this lab wanted Cilium beyond the dataplane.
+hubble:
+  enabled: true
+  relay:
+    enabled: true
+    nodeSelector:
+      kubernetes.io/hostname: urahara
+  ui:
+    enabled: true
+    nodeSelector:
+      kubernetes.io/hostname: urahara

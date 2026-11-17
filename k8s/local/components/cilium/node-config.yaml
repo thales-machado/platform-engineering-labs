@@ -1,0 +1,21 @@
+# Applies only to nodes labelled io.cilium.migration/cilium-default=true, so on
+# creation it matches nothing. Labelling a node is what hands that node's CNI
+# to Cilium. ADR 0019.
+#
+# cni-exclusive removes the other CNI's config from the node, which is why the
+# label is the point of no return for that node: after the reboot, going back
+# to Calico means writing its conflist by hand.
+apiVersion: cilium.io/v2
+kind: CiliumNodeConfig
+metadata:
+  namespace: kube-system
+  name: cilium-default
+spec:
+  nodeSelector:
+    matchLabels:
+      io.cilium.migration/cilium-default: "true"
+  defaults:
+    write-cni-conf-when-ready: /host/etc/cni/net.d/05-cilium.conflist
+    custom-cni-conf: "false"
+    cni-chaining-mode: "none"
+    cni-exclusive: "true"

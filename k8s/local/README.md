@@ -1584,7 +1584,20 @@ Verified locally before the first push: 17 resources from the charts, 46 from th
 
 ### 5. CNI migration: Calico to Cilium
 
-Planned.
+Planned, written up before anything runs. [ADR 0019](docs/adr/0019-calico-to-cilium.md), [runbook](docs/runbooks/cilium-migration.md).
+
+Cilium 1.20.4, live, one node at a time, with Cilium running alongside Calico during the transition. Four phases kept apart on purpose:
+
+| Phase | What | Why separate |
+|---|---|---|
+| 1 | Cilium in secondary mode, changing nothing | the install must be provably inert before a node is handed over |
+| 2 | zangetsu, then urahara | the cheap node first, so the expensive one repeats a known procedure |
+| 3 | kube-proxy replacement | its own failure mode, after the cluster is stable on Cilium |
+| 4 | MetalLB replaced by Cilium L2 announcements | last: it moves the IP that serves every hostname in the lab |
+
+The settings are forced by what already runs: pod CIDR `10.245.0.0/16` because Calico has `10.244.0.0/16`, GENEVE on 6081 because Calico holds VXLAN on 4789, policy enforcement off during the migration because otherwise traffic from Calico-managed pods is dropped, and host legacy routing on so the two dataplanes can route to each other.
+
+Two things this step forces into the open. Argo CD has to be paused: it manages `calico` with `selfHeal`, and a controller that reverts changes is the opposite of what a migration needs. And `local-path` volumes are node-bound, so rebooting urahara takes down the control plane, Argo CD, the whole observability stack and the Postgres primary at once, with nowhere for them to go until the node is back. That is the first time the error budget from step 3 gets spent on purpose.
 
 ## Postmortems
 
