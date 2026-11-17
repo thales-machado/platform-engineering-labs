@@ -1571,6 +1571,7 @@ Planned.
 | [PM-0004](docs/postmortems/0004-swap-back-after-reboot.md) | 2026-11-05 | Swap came back on urahara after reboot, kubelet down | medium |
 | [PM-0005](docs/postmortems/0005-no-lb-failover-control-plane-excluded.md) | 2026-11-05 | No LoadBalancer failover when zangetsu rebooted | medium |
 | [PM-0006](docs/postmortems/0006-etcd-crash-corrupted-image-layer.md) | 2026-11-09 | etcd crash loop from a corrupted image layer on disk, control plane down 41h | high |
+| [PM-0007](docs/postmortems/0007-placeholders-applied-by-gitops.md) | 2026-11-16 | Placeholders in Git applied to the cluster by Argo CD (near miss) | low |
 
 ## Teardown
 

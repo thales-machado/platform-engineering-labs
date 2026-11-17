@@ -5,9 +5,9 @@
 # Contact address for the Let's Encrypt account. An alias on a domain under
 # our control rather than a personal address: this repository is public, and a
 # placeholder is not an option, because Argo applies what is written here on a
-# timer. It spent 2026-11-16 writing the literal <ACME_EMAIL> into both
-# issuers, which stayed Ready only because the account registration is cached
-# in its Secret.
+# timer: on 2026-11-16 it wrote the placeholder that used to be on this line
+# into both issuers, which stayed Ready only because the account registration
+# is cached in its Secret. See PM-0007.
 apiVersion: cert-manager.io/v1
 kind: ClusterIssuer
 metadata:

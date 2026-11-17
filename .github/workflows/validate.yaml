@@ -26,6 +26,18 @@ jobs:
         with:
           version: v3.18.4
 
+      - name: no placeholders in applied manifests
+        run: |
+          # PM-0007: a file can be a template for a reader or desired state for
+          # a controller, not both. Argo applies what is here on a timer, and
+          # it wrote <ACME_EMAIL> into two ClusterIssuers.
+          if grep -rn '<[A-Z][A-Z_]\{2,\}>' k8s/local/components k8s/local/charts \
+               k8s/local/gitops k8s/local/drills 2>/dev/null; then
+            echo "::error::placeholder found in a manifest Argo CD applies"
+            exit 1
+          fi
+          echo "no placeholders"
+
       - name: helm lint
         run: |
           for chart in k8s/local/charts/*/; do
