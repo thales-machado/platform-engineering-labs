@@ -1,0 +1,23 @@
+# The shared Gateway and the whoami test app. Every HTTPRoute in this cluster
+# has this Gateway as its parentRef, so the object matters more than the
+# workload next to it.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik-config
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/components/traefik
+    directory:
+      exclude: 'values.yaml'
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false

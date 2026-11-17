@@ -1,0 +1,38 @@
+# Traefik, chart 42.3.1, the same release name as the Application so the
+# adoption lands on the running release rather than building a second one.
+#
+# This is the component whose failure hides the tools you would use to fix it:
+# it serves argocd.lab.thalespm.me, grafana, the Dashboard and the app. If a
+# sync breaks it, the way back is not the UI, it is:
+#
+#   helm upgrade --install traefik traefik/traefik --version 42.3.1 \
+#     -n traefik -f components/traefik/values.yaml --force-conflicts
+#
+# kubectl keeps working throughout: the API server is not behind Traefik.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: traefik
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    - repoURL: https://traefik.github.io/charts
+      chart: traefik
+      targetRevision: 42.3.1
+      helm:
+        releaseName: traefik
+        valueFiles:
+          - $values/k8s/local/components/traefik/values.yaml
+    - repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+      targetRevision: main
+      ref: values
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: traefik
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
+    syncOptions:
+      - CreateNamespace=false
