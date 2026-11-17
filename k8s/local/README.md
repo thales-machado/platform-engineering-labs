@@ -1616,6 +1616,32 @@ After the fix: `Routing: Network: Tunnel [vxlan]`, a test pod at `10.245.0.16`, 
 
 The question the split state raises is whether a Calico pod on urahara can still reach a Cilium pod on zangetsu, and the probe built for PM-0003 answers it directly: `cross-node 1`, through a Service, across two CIDRs and two dataplanes. That is `bpf.hostLegacyRouting` doing its job, and it is the only reason a live migration is possible at all.
 
+**urahara, 2026-11-17.** The database primary was promoted to `lab-pg-2`
+first, so the reboot was not also a failover. The drain stopped once on
+`pg-writer`, a bare pod left over from the 2.6 drill with no controller to
+recreate it, and once on `calico-apiserver`, whose PodDisruptionBudget held the
+eviction for a minute until the replica on zangetsu was ready. Both are the
+mechanism working.
+
+The node came back with `Routing: Network: Tunnel [vxlan]`, 119 of 119
+controllers healthy, and a test pod at `10.245.1.229`: cluster-pool IPAM gave
+urahara the second `/24`, zangetsu holds the first. Both nodes are on Cilium,
+every pod in the cluster is `Running`, and the netcheck probes read 1 on both
+paths.
+
+One finding came out of the reboot that has nothing to do with Cilium.
+`calico-node` restarted, rewrote `10-calico.conflist`, and Cilium's installer
+renamed it again: both are still fighting over `/etc/cni/net.d` and the only
+reason Cilium wins is that its file sorts first. That is an argument for phase 4
+removing Calico rather than leaving it installed and quiet.
+
+The other is PM-0008. Traefik lost every API watch in the second urahara went
+down and served a 404 on one hostname for five minutes afterward, while the
+HTTPRoute reported `Accepted` and nothing alerted. The lab probes exactly one
+hostname, so a dead route on any of the other five is invisible. A planned
+reboot found a monitoring gap that an unplanned one would have found at a worse
+hour.
+
 Two things this step forces into the open. Argo CD has to be paused: it manages `calico` with `selfHeal`, and a controller that reverts changes is the opposite of what a migration needs. And `local-path` volumes are node-bound, so rebooting urahara takes down the control plane, Argo CD, the whole observability stack and the Postgres primary at once, with nowhere for them to go until the node is back. That is the first time the error budget from step 3 gets spent on purpose.
 
 ## Postmortems
