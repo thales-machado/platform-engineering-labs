@@ -12,8 +12,8 @@ operator:
     restart: true
 
 routingMode: tunnel
-tunnelProtocol: geneve
-tunnelPort: 6081
+tunnelProtocol: vxlan
+tunnelPort: 8472
 
 ipam:
   mode: cluster-pool

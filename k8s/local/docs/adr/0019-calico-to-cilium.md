@@ -47,7 +47,7 @@ Settings forced by what is already running:
 |---|---|---|
 | IPAM | `cluster-pool` | required for migration, prevents collisions with Calico's allocations |
 | Pod CIDR | `10.245.0.0/16` | must not overlap `10.244.0.0/16` |
-| Tunnel | GENEVE, port 6081 | Calico holds VXLAN 4789; two overlays cannot share an encapsulation port |
+| Tunnel | VXLAN, port 8472 | Calico holds VXLAN 4789; two overlays cannot share an encapsulation port. GENEVE was the first choice and the Raspberry Pi kernel has no geneve module |
 | `policyEnforcementMode` | `never` during migration | otherwise traffic from Calico-managed pods is dropped |
 | `bpf.hostLegacyRouting` | `true` during migration | so the two dataplanes can route to each other |
 | `cni.customConf` | `true` initially | Cilium writes no CNI config until a node is labelled |
@@ -89,3 +89,18 @@ The honest risk: Cilium's own documentation says migration has not been tested
 with an existing NetworkPolicy provider, and Calico is one. This cluster has no
 NetworkPolicy objects, which is why that warning is survivable here and would
 not be in a cluster that had them.
+
+## Correction, same day
+
+The first attempt used GENEVE on 6081, chosen because Calico holds VXLAN 4789.
+It failed on zangetsu: kernel 6.18.34+rpt-rpi-2712 ships no geneve module, so
+`cilium_geneve` could not be created, the datapath never initialised, and the
+kubelet got `429 putEndpointIdTooManyRequests` for every pod on that node.
+
+The reasoning about the port clash was right; the assumption that both kernels
+offer the same tunnel protocols was never checked, and one node is an arm64
+board with a vendor kernel. VXLAN on 8472 avoids both the clash and the missing
+module, and `vxlan.ko` is loaded on both nodes because Calico uses it.
+
+It cost nothing because the node was drained and cordoned first, which is the
+entire reason the ADR migrates the cheap node before the control plane.

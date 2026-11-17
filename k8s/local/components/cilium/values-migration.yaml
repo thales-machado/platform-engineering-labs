@@ -14,11 +14,16 @@ operator:
   unmanagedPodWatcher:
     restart: false
 
-# GENEVE, because Calico holds VXLAN on 4789 and two overlays cannot share an
-# encapsulation port.
+# VXLAN on 8472, not the default 4789 that Calico holds: two overlays cannot
+# share an encapsulation port.
+#
+# GENEVE was the first choice and failed on zangetsu: the Raspberry Pi kernel
+# 6.18.34+rpt-rpi-2712 ships no geneve module, so Cilium could not create
+# cilium_geneve, its datapath never initialised, and every endpoint request
+# came back 429. vxlan.ko is present on both nodes, which Calico proves daily.
 routingMode: tunnel
-tunnelProtocol: geneve
-tunnelPort: 6081
+tunnelProtocol: vxlan
+tunnelPort: 8472
 
 ipam:
   mode: cluster-pool
