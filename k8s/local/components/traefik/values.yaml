@@ -1,9 +1,9 @@
 # Traefik Helm values (ADR 0008). Chart traefik/traefik 42.3.1, Traefik v3.7.17.
-# <TRAEFIK_IP>: first IP of the MetalLB pool, fixed so DNS can point to it.
+# First IP of the MetalLB pool, fixed so DNS can point to it.
 # Gateway API CRDs are not shipped with the chart: install them first (step 1.17).
 service:
   annotations:
-    metallb.io/loadBalancerIPs: <TRAEFIK_IP>
+    metallb.io/loadBalancerIPs: 192.168.15.241
 providers:
   kubernetesIngress:
     enabled: true

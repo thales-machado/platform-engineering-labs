@@ -1,5 +1,5 @@
 # MetalLB v0.16.2 L2 configuration (ADR 0005).
-# <POOL_START>-<POOL_END>: fixed LAN IPs outside the router's DHCP range,
+# Fixed LAN IPs outside the router's DHCP range,
 # checked free before install (ping and ARP). One IP in the planned range was
 # already in use on the LAN, so the pool stops before it.
 apiVersion: metallb.io/v1beta1
@@ -9,7 +9,12 @@ metadata:
   namespace: metallb-system
 spec:
   addresses:
-    - <POOL_START>-<POOL_END>
+    # Real values, not placeholders. Under GitOps a placeholder is applied by
+    # a controller on a timer: Argo spent 2026-11-16 trying to write the
+    # literal string here, and only MetalLB's validating webhook stopped it.
+    - 192.168.15.241-192.168.15.247
+  autoAssign: true
+  avoidBuggyIPs: false
 ---
 apiVersion: metallb.io/v1beta1
 kind: L2Advertisement
