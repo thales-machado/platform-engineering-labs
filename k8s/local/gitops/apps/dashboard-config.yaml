@@ -1,0 +1,25 @@
+# The read-only RBAC and the route for the Kubernetes Dashboard. Same split as
+# cert-manager: manifests here, chart in its own Application.
+#
+# The long-lived token Secret lives in the cluster only, like every other
+# secret in this lab.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: dashboard-config
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/components/dashboard
+    directory:
+      exclude: values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: kubernetes-dashboard
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false

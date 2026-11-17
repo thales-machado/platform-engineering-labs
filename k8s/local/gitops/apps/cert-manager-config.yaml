@@ -1,0 +1,23 @@
+# ClusterIssuers, the wildcard Certificate and the ServiceMonitor. The chart
+# itself is a separate Application: a directory source cannot render a chart,
+# and values.yaml sitting in the same folder is Helm input, not a manifest.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: cert-manager-config
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/components/cert-manager
+    directory:
+      exclude: values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: cert-manager
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false

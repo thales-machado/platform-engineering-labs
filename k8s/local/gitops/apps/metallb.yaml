@@ -1,0 +1,22 @@
+# MetalLB's own manifests: the address pool, the PodMonitor from PM-0005 and
+# the auth-delegator bindings its upstream manifest omits. The operator itself
+# came from an upstream URL and is not in this repository, so Argo manages the
+# configuration and not the installation.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: metallb
+  namespace: argocd
+spec:
+  project: default
+  source:
+    repoURL: https://github.com/thales-machado/platform-engineering-labs.git
+    targetRevision: main
+    path: k8s/local/components/metallb
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: metallb-system
+  syncPolicy:
+    automated:
+      selfHeal: true
+      prune: false
