@@ -156,33 +156,97 @@ evidence that it would work during an unplanned one.
 Only once both nodes report Cilium and every pod has an IP in `10.245.0.0/16`.
 
 ```bash
-kubectl get pods -A -o wide | grep -c '10.244\.'   # must be 0
+kubectl get pod -A -o wide | awk '$7 ~ /^10\.244\./' | wc -l    # must be 0
 ```
+
+**Calico goes first, and the operator goes last.** This order is not a
+preference. Calico is installed through the Tigera operator, so the operator is
+what deletes `calico-node`, `calico-typha`, `calico-apiserver` and
+`csi-node-driver`, in that order, and what removes the two finalizers on the
+Installation afterwards. Delete the operator before it finishes and the
+Installation is stuck in `Terminating` with nothing left to clean it up.
+
+Also remove the Argo Application before anything else, and push the file
+removal, or the root app will put it back the next time it syncs.
+
+```bash
+git rm k8s/local/gitops/apps/calico.yaml && git commit && git push
+kubectl -n argocd delete application calico
+```
+
+```bash
+kubectl delete installation default --wait=false
+kubectl -n calico-system get pod -w      # Ctrl+C once it is empty
+```
+
+Wait for `calico-system` to be empty. Only then:
+
+```bash
+kubectl delete -f https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/tigera-operator.yaml
+kubectl delete apiservice v3.projectcalico.org --ignore-not-found
+```
+
+Delete the APIService before the `calico-apiserver` pods are gone, or any
+`kubectl` command that enumerates API groups waits on a dead endpoint and
+appears to hang.
+
+Then Cilium takes the directory over:
 
 ```bash
 helm upgrade cilium cilium/cilium --version 1.20.4 \
   -n kube-system -f components/cilium/values.yaml
-kubectl -n kube-system rollout restart ds/cilium
+kubectl -n kube-system rollout status ds/cilium --timeout=5m
 kubectl -n kube-system delete ciliumnodeconfig cilium-default
+sudo ls -l /etc/cni/net.d/     # 05-cilium.conflist alone
 ```
 
-Then remove Calico, which is also when its Argo Application and its file go:
+`cni.exclusive: true` is what removes `10-calico.conflist.cilium_bak`. Doing
+this while `calico-node` is still alive is pointless, because it writes its
+config back every time it starts.
+
+Last, the CRDs and the namespaces:
 
 ```bash
-kubectl delete -f components/calico/installation.yaml
-kubectl delete -f https://raw.githubusercontent.com/projectcalico/calico/v3.33.0/manifests/tigera-operator.yaml
-kubectl get pods -n calico-system -n tigera-operator
+kubectl get crd -o name | grep -E 'projectcalico|tigera' | xargs kubectl delete
+kubectl delete ns calico-system tigera-operator
 ```
 
-Re-enable Argo CD last, after the cluster is proven:
+Re-enable Argo CD only after the cluster is proven:
 
 ```bash
-# remove gitops/apps/calico.yaml from the repo first, then
 for a in $(kubectl -n argocd get app -o name); do
   kubectl -n argocd patch $a --type merge \
     -p '{"spec":{"syncPolicy":{"automated":{"selfHeal":true,"prune":false}}}}'
 done
 ```
+
+### If the Installation is stuck in Terminating
+
+```bash
+kubectl get installation default \
+  -o jsonpath='del={.metadata.deletionTimestamp} fin={.metadata.finalizers}{"\n"}'
+```
+
+A `deletionTimestamp` with `tigera.io/operator-cleanup` and
+`operator.tigera.io/apiserver-controller` still listed means the operator died
+mid-teardown. Two ways out:
+
+1. Reinstall the operator and let it finish. Correct, and it means installing
+   the CNI you are deleting.
+2. Cut the finalizers:
+
+   ```bash
+   kubectl patch installation default --type merge -p '{"metadata":{"finalizers":null}}'
+   kubectl -n calico-system delete deploy --all
+   kubectl -n calico-system delete ds --all
+   ```
+
+Option 2 is defensible only here, and only because Calico is being removed for
+good and Cilium already owns the dataplane. The price is the cleanup the
+operator would have done: Calico's iptables chains and `cali*` interfaces stay
+on both nodes until they are removed by hand or the node reboots. A finalizer
+exists so a controller can clean up before an object disappears, so cutting one
+is accepting the leftovers, with a list of what they are.
 
 ## What to check at the end
 
