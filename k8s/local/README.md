@@ -1554,6 +1554,10 @@ Four things failed quietly along the way, and each one reported success somewher
 
 The common shape is worth stating once: **`Synced` means the cluster matches Git. It says nothing about whether Git says what you meant.**
 
+Wave 4, Traefik and Calico, ran the same evening and was uneventful: Traefik's pod kept its 7 day uptime, the LoadBalancer kept `192.168.15.241`, the Gateway stayed `Programmed`, all five hostnames answered, and every Tigera component stayed `Available`. The dangerous wave was the quiet one, because the three failure modes had already been found in the safe ones.
+
+Twenty Applications now, everything except two things that stay outside Git on purpose: the secrets, and the Tigera operator itself, which was installed from an upstream URL in step 1. A cluster rebuilt from this repository alone needs that one command first, and `kubeadm` before it.
+
 #### 4.6 CI (2026-11-16)
 
 Until now nothing checked what went into this repository. Argo CD syncs whatever is on `main`, so a typo in a chart reached the cluster and was found there. [.github/workflows/validate.yaml](../../.github/workflows/validate.yaml) asks three questions before the merge instead:

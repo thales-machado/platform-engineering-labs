@@ -28,7 +28,11 @@ serviceMonitor:
 
 # Extra flags for podinfo. Used in step 4 to ship a version that fails on
 # purpose, so the canary analysis has something real to reject.
-extraArgs: []
+extraArgs:
+  # DRILL 2026-11-16, third run: the same broken build against the corrected
+  # query, which now excludes probe and scrape paths and counts 4xx as
+  # failures. Expected near 0.67.
+  - "--random-error=true"
 
 # Step 4: progressive delivery. With this off the chart renders a plain
 # Deployment, so it still works on a cluster without Argo Rollouts.
