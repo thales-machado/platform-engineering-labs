@@ -1597,6 +1597,25 @@ Cilium 1.20.4, live, one node at a time, with Cilium running alongside Calico du
 
 The settings are forced by what already runs: pod CIDR `10.245.0.0/16` because Calico has `10.244.0.0/16`, GENEVE on 6081 because Calico holds VXLAN on 4789, policy enforcement off during the migration because otherwise traffic from Calico-managed pods is dropped, and host legacy routing on so the two dataplanes can route to each other.
 
+**Phase 1 and zangetsu, 2026-11-16.** Cilium 1.20.4 installed in secondary mode changed nothing, as it should: `CNI configuration management disabled`, zero pods managed. zangetsu was drained, labelled, and rebooted.
+
+It failed on the reboot, and the failure is the interesting part:
+
+```
+failed to setup geneve tunnel device: creating device cilium_geneve:
+operation not supported, maybe kernel module for geneve is not available?
+```
+
+The Raspberry Pi kernel `6.18.34+rpt-rpi-2712` ships no `geneve` module. Cilium's datapath never initialised, so it refused every endpoint request and the kubelet got `429 putEndpointIdTooManyRequests` for each pod: nothing on that node could get an IP.
+
+GENEVE was chosen because Calico holds VXLAN on 4789 and two overlays cannot share an encapsulation port. That reasoning was right; the assumption that both kernels offer the same protocols was never checked, and one node is an arm64 board with a vendor kernel. VXLAN on **8472** avoids the clash and uses a module Calico proves is there every day.
+
+It cost nothing because the node was drained and cordoned first. That is the whole reason ADR 0019 migrates the cheap node before the control plane.
+
+After the fix: `Routing: Network: Tunnel [vxlan]`, a test pod at `10.245.0.16`, and every workload back on zangetsu with a `10.245` address.
+
+The question the split state raises is whether a Calico pod on urahara can still reach a Cilium pod on zangetsu, and the probe built for PM-0003 answers it directly: `cross-node 1`, through a Service, across two CIDRs and two dataplanes. That is `bpf.hostLegacyRouting` doing its job, and it is the only reason a live migration is possible at all.
+
 Two things this step forces into the open. Argo CD has to be paused: it manages `calico` with `selfHeal`, and a controller that reverts changes is the opposite of what a migration needs. And `local-path` volumes are node-bound, so rebooting urahara takes down the control plane, Argo CD, the whole observability stack and the Postgres primary at once, with nowhere for them to go until the node is back. That is the first time the error budget from step 3 gets spent on purpose.
 
 ## Postmortems
