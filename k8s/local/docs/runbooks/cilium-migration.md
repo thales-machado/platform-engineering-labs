@@ -83,8 +83,14 @@ kubectl -n kube-system rollout status ds/cilium
 ssh keydrop@192.168.15.214 'ls -l /etc/cni/net.d/'
 ```
 
-`05-cilium.conflist` must be there and Calico's config must be gone before the
-reboot. That file is the point of no return for this node.
+`05-cilium.conflist` must be there before the reboot. Calico's config is not
+deleted, it is renamed: zangetsu showed `10-calico.conflist.cilium_bak`
+alongside the new file. That is better than this runbook first assumed, because
+rollback after the reboot is one `mv` and a kubelet restart.
+
+The kubelet reads the lowest-numbered conflist, so `05-cilium` wins while the
+Calico file keeps its contents. That rename is the point of no return for the
+node in practice, since the next pod to start gets a Cilium IP.
 
 ```bash
 ssh keydrop@192.168.15.214 sudo reboot
@@ -121,9 +127,24 @@ kubectl cnpg promote lab-pg -n lab-db lab-pg-2
 kubectl cnpg status lab-pg -n lab-db | head -12
 ```
 
-Then the same five commands as zangetsu with `NODE=urahara` and
-`192.168.15.215`. Expect `kubectl` to fail while the node reboots: the API
-server is on it. That is not a failure, it is the cost named in ADR 0019.
+Then the same commands as zangetsu with `NODE=urahara` and `192.168.15.215`.
+Expect `kubectl` to fail while the node reboots: the API server is on it. That
+is not a failure, it is the cost named in ADR 0019.
+
+Two differences from zangetsu:
+
+- The static pods (`etcd`, `kube-apiserver`, `kube-controller-manager`,
+  `kube-scheduler`) are not evicted by a drain, so `kubectl` keeps working
+  between the drain and the reboot.
+- Every PVC on `local-path` is pinned to urahara by node affinity: Prometheus,
+  Loki, Grafana, Argo CD's repo cache and `lab-pg-1`. The drain evicts those
+  pods and they stay `Pending` until the node is back and uncordoned. Nothing
+  is lost, the data is on the disk that is rebooting, but the lab is blind for
+  the duration: no dashboards, no in-cluster alerts, no Argo.
+
+The homelab alerting is the only part of the stack that survives this reboot.
+Leave it on. Watching it fire during a planned outage is free evidence that it
+would fire during an unplanned one.
 
 While it is down, nothing in the lab answers. The homelab alerting will fire,
 which is correct and worth leaving on: it is the only part of the stack that
