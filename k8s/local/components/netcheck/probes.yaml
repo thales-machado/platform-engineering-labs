@@ -44,3 +44,70 @@ spec:
         path: same-node
         from: urahara
         to: urahara
+---
+# Every hostname the lab serves, probed from inside. PM-0008: Traefik served a
+# 404 on one host for five minutes after a control plane reboot while the
+# HTTPRoute reported Accepted, and nothing noticed, because only app was
+# watched and only from the homelab.
+#
+# This walks the whole path: cluster DNS, the LAN resolver, the MetalLB
+# address, Traefik, the route, the backend.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: lab-hostnames
+  namespace: lab-obs
+spec:
+  interval: 60s
+  module: http_route_alive
+  prober:
+    url: blackbox-exporter.lab-obs.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - https://app.lab.thalespm.me/
+        - https://grafana.lab.thalespm.me/
+        - https://prometheus.lab.thalespm.me/
+        - https://argocd.lab.thalespm.me/
+        - https://dashboard.lab.thalespm.me/
+        - https://rollouts.lab.thalespm.me/
+      labels:
+        check: route
+---
+# Pod to internet, one probe per node, each through the exporter that runs on
+# that node. PM-0009.
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: egress-urahara
+  namespace: lab-obs
+spec:
+  interval: 60s
+  module: http_egress
+  prober:
+    url: blackbox-exporter.lab-obs.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - https://cloudflare.com/cdn-cgi/trace
+      labels:
+        check: egress
+        node: urahara
+---
+apiVersion: monitoring.coreos.com/v1
+kind: Probe
+metadata:
+  name: egress-zangetsu
+  namespace: lab-obs
+spec:
+  interval: 60s
+  module: http_egress
+  prober:
+    url: blackbox-exporter-zangetsu.lab-obs.svc.cluster.local:9115
+  targets:
+    staticConfig:
+      static:
+        - https://cloudflare.com/cdn-cgi/trace
+      labels:
+        check: egress
+        node: zangetsu

@@ -17,6 +17,24 @@ data:
         http:
           valid_status_codes: []
           preferred_ip_protocol: ip4
+      # For the lab's own hostnames. They do not all answer 200: Grafana and
+      # the Rollouts dashboard redirect to a login, Prometheus asks for basic
+      # auth. All of those mean the route works. A 404 does not, which is the
+      # whole point after PM-0008, so it is not in this list.
+      http_route_alive:
+        prober: http
+        timeout: 8s
+        http:
+          valid_status_codes: [200, 301, 302, 401, 403]
+          preferred_ip_protocol: ip4
+      # Pod to internet. PM-0009: a node can lose this completely while every
+      # other probe stays green.
+      http_egress:
+        prober: http
+        timeout: 10s
+        http:
+          valid_status_codes: [200]
+          preferred_ip_protocol: ip4
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -76,6 +94,73 @@ metadata:
 spec:
   selector:
     app: blackbox-exporter
+  ports:
+    - name: http
+      port: 9115
+      targetPort: http
+---
+# A second exporter, pinned to zangetsu. Egress has to be measured from each
+# node separately: it is a property of that node's datapath, not of the
+# cluster. One exporter on urahara would have reported the internet reachable
+# for the ten hours of PM-0009.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: blackbox-exporter-zangetsu
+  namespace: lab-obs
+  labels:
+    app: blackbox-exporter-zangetsu
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: blackbox-exporter-zangetsu
+  template:
+    metadata:
+      labels:
+        app: blackbox-exporter-zangetsu
+    spec:
+      nodeSelector:
+        kubernetes.io/hostname: zangetsu
+      containers:
+        - name: blackbox-exporter
+          image: quay.io/prometheus/blackbox-exporter:v0.28.0
+          args:
+            - --config.file=/etc/blackbox/blackbox.yml
+          ports:
+            - name: http
+              containerPort: 9115
+          volumeMounts:
+            - name: config
+              mountPath: /etc/blackbox
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 64Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+      volumes:
+        - name: config
+          configMap:
+            name: blackbox-exporter
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: blackbox-exporter-zangetsu
+  namespace: lab-obs
+spec:
+  selector:
+    app: blackbox-exporter-zangetsu
   ports:
     - name: http
       port: 9115
