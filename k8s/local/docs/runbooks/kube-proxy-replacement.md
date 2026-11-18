@@ -83,44 +83,37 @@ kubectl -n kube-system delete cm kube-proxy
 
 The ConfigMap goes too, or a future `kubeadm upgrade` reinstalls kube-proxy.
 
-Now clean its rules, which is different per node.
+Now clean its rules.
 
-**urahara**, where iptables works:
+**This cluster runs kube-proxy in nftables mode**, not iptables. Its rules are
+not in the `KUBE-*` chains the upstream docs talk about; they are in two tables
+of their own. The documented cleanup,
+`iptables-save | grep -v KUBE | iptables-restore`, removes nothing here and
+reports success, which is worse than failing.
 
-```bash
-sudo sh -c 'iptables-save | grep -v KUBE | iptables-restore'
-sudo iptables-save | grep -c KUBE-SVC     # expect 0
-```
-
-**zangetsu**, where `iptables-save` fails on three tables: do not try. Drain
-and reboot, which clears every non-persistent nftables rule and lets
-tailscaled, Docker and Cilium write theirs again.
+Same two commands on both nodes, and `nft` works on zangetsu even though
+`iptables` does not:
 
 ```bash
-kubectl cnpg promote lab-pg -n lab-db lab-pg-1   # move the primary off zangetsu
-sleep 20
-kubectl cnpg status lab-pg -n lab-db | head -12
-
-kubectl cordon zangetsu
-kubectl drain zangetsu --ignore-daemonsets --delete-emptydir-data --timeout=10m
-ssh keydrop@192.168.15.214 sudo reboot
+sudo nft list tables | grep kube-proxy
+sudo nft delete table ip kube-proxy
+sudo nft delete table ip6 kube-proxy
+sudo nft list tables | grep -c kube-proxy      # expect 0
 ```
 
-While it is down, Pi-hole's VIP moves to urahara. Check from a LAN device:
+Calico also leaves its VXLAN interface behind until a reboot, and Cilium
+attaches its programs to it. Remove it on both nodes:
 
 ```bash
-dig +short lan.thalespm.me @192.168.15.248 | head -2
+ip -brief link show | grep -E 'cilium|vxlan|cali'
+sudo ip link delete vxlan.calico
 ```
 
-When it is back:
-
-```bash
-kubectl get node -o wide
-ssh keydrop@192.168.15.214 'sudo nft list ruleset | grep -c KUBE-SVC'   # expect 0
-kubectl uncordon zangetsu
-sleep 90
-kubectl get pod -A -o wide | grep -vE 'Running|Completed'
-```
+No drain and no reboot are needed for any of this. An earlier version of this
+runbook rebooted zangetsu to clear the rules, on the assumption that they were
+iptables rules that could not be read there. They are nftables rules and `nft`
+deletes them in place, so the Pi-hole failover this step used to require never
+happens.
 
 Verify services still work with no kube-proxy anywhere:
 
