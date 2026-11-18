@@ -34,7 +34,17 @@ bpf:
   # briefly, so it is a change of its own, not a side effect of cleanup.
   hostLegacyRouting: true
 
-kubeProxyReplacement: false
+# ADR 0020. Cilium handles Services in eBPF instead of kube-proxy's iptables
+# chains. Enabled in phase 1 while kube-proxy is still installed, which is a
+# supported overlap and the point at which this is still trivially reversible.
+kubeProxyReplacement: true
+
+# Required without kube-proxy: there is no iptables rule for the kubernetes
+# Service any more, so the agents need the API server's real address. One
+# control plane, so this is urahara. If urahara is down the agents cannot
+# reach the API server, which was already true and is now written down.
+k8sServiceHost: 192.168.15.215
+k8sServicePort: 6443
 
 # Flow visibility, the reason this lab wanted Cilium beyond the dataplane.
 hubble:
