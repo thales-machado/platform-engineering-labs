@@ -160,6 +160,11 @@ the state before this change depended on chains that a reboot destroys:
 The `nodeSelector` pinning cert-manager to urahara is removed in the same
 commit. It existed only for this.
 
+The scheduler then put all three cert-manager pods on zangetsu, and both
+ClusterIssuers stayed `Ready`. The one workload in this lab that needs the
+internet is running on the node that had none, and reaching Let's Encrypt from
+it. That is a better closing test than any probe.
+
 ## What this cost to learn
 
 Two days, and a path that went the wrong way twice. `bpf.masquerade` was the
