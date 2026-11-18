@@ -1,5 +1,17 @@
 # Runbook: kube-proxy replacement and eBPF masquerading
 
+> **Do not run this.** ADR 0020 was rejected on 2026-11-18: zangetsu's kernel
+> ships no BTF, so Cilium's socket load balancer cannot load and the node stops
+> being able to create pods. See PM-0012. The runbook is kept because the
+> procedure is correct for hardware that has BTF, and because the recovery
+> steps at the bottom of PM-0012 are what undo it.
+>
+> One-second test before ever trying again, on **every** node:
+>
+> ```bash
+> ls /sys/kernel/btf/vmlinux
+> ```
+
 ADR 0020. Run the phases in order. Stop at the first check that does not match.
 
 Total disruption expected: two node reboots, one of them the control plane.
@@ -60,10 +72,17 @@ Leave `bpf.masquerade` out of this phase.
 helm upgrade cilium cilium/cilium -n kube-system --version 1.20.4 \
   -f k8s/local/components/cilium/values.yaml
 kubectl -n kube-system rollout status ds/cilium --timeout=5m
-kubectl -n kube-system exec ds/cilium -c cilium-agent -- cilium-dbg status | grep -i kubeproxy
+for n in urahara zangetsu; do
+  echo "== $n"
+  P=$(kubectl -n kube-system get pod -l k8s-app=cilium --field-selector spec.nodeName=$n -o name)
+  kubectl -n kube-system exec $P -c cilium-agent -- cilium-dbg status \
+    | grep -iE 'kubeproxy|cilium:|controller status'
+done
 ```
 
-Expect `KubeProxyReplacement: True`. Both kube-proxy and Cilium now program
+Expect `KubeProxyReplacement: True` **on both nodes**. `ds/cilium` picks one
+pod, and one node reporting healthy says nothing about the other: that is
+exactly how PM-0012 went unnoticed for half an hour. Both kube-proxy and Cilium now program
 service traffic; that overlap is intended and brief.
 
 ```bash
