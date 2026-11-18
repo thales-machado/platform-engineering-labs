@@ -428,7 +428,7 @@ sudo tee /usr/local/sbin/k8s-docker-user.sh >/dev/null <<'EOF'
 #!/bin/sh
 # Accept Kubernetes pod traffic in Docker's DOCKER-USER chain (ADR 0012).
 set -eu
-CIDR=10.244.0.0/16
+CIDR=10.245.0.0/16   # 10.244.0.0/16 until step 5 moved the cluster to Cilium
 for dir in saddr daddr; do
   nft list chain ip filter DOCKER-USER | grep -q "ip $dir $CIDR accept" \
     || nft insert rule ip filter DOCKER-USER ip "$dir" "$CIDR" accept
@@ -1594,6 +1594,23 @@ Cilium 1.20.4, live, one node at a time, with Cilium running alongside Calico du
 | 2 | zangetsu, then urahara | the cheap node first, so the expensive one repeats a known procedure |
 | 3 | kube-proxy replacement | its own failure mode, after the cluster is stable on Cilium |
 | 4 | MetalLB replaced by Cilium L2 announcements | last: it moves the IP that serves every hostname in the lab |
+
+**Phases 3 and 4 did not happen, and the reason is the same for both.** Phase 3
+was attempted on 2026-11-18 and reverted 31 minutes later: `kubeProxyReplacement`
+loads Cilium's socket load balancer, which needs CO-RE relocations, which need
+BTF in the kernel, and the Raspberry Pi vendor kernel on zangetsu ships none.
+No new pod could get an endpoint on that node while it was on. PM-0012, and
+ADR 0020 is marked rejected.
+
+Phase 4 falls with it: Cilium's L2 announcements require kube-proxy
+replacement, so MetalLB stays. That is not a workaround, it is the correct
+design for this hardware, and it is now written down with the measurement
+behind it.
+
+This is the third design in this lab decided by that one kernel, after the
+missing `geneve` module and the missing legacy `ip_tables`. The lab standard
+now requires a per-node capability check before any datapath change
+([runbook](docs/runbooks/node-capability-check.md)).
 
 The settings are forced by what already runs: pod CIDR `10.245.0.0/16` because Calico has `10.244.0.0/16`, GENEVE on 6081 because Calico holds VXLAN on 4789, policy enforcement off during the migration because otherwise traffic from Calico-managed pods is dropped, and host legacy routing on so the two dataplanes can route to each other.
 

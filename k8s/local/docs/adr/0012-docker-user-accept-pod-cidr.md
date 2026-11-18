@@ -12,7 +12,15 @@ Docker sets the `FORWARD` chain of `ip filter` to `policy drop` when it enables 
 
 In iptables mode, Calico adds its ACCEPT rules inside that same `FORWARD` chain, so pod traffic passes. In nftables mode, Calico uses its own table (`ip calico`). In nftables, a packet must be accepted by every base chain on the same hook, so Calico accepting it does not stop Docker's `FORWARD` from dropping it.
 
-Test: two rules in `DOCKER-USER` accepting `10.244.0.0/16` as source and destination on urahara fixed ping and DNS at once.
+Test: two rules in `DOCKER-USER` accepting the pod CIDR as source and destination on urahara fixed ping and DNS at once.
+
+**Updated 2026-11-18.** The CIDR in `/usr/local/sbin/k8s-docker-user.sh` is
+`10.245.0.0/16` since step 5 migrated the cluster to Cilium. It read
+`10.244.0.0/16`, Calico's CIDR, for a day after the migration: harmless only
+because Cilium sets the `FORWARD` policy to `ACCEPT`, and a return of PM-0003
+waiting for a Docker restart that put the policy back to `DROP` before Cilium
+had installed its rules. A rule that names a CIDR has to be revisited when the
+CIDR changes, and nothing in the migration checklist said so.
 
 ## Options
 
