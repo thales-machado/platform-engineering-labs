@@ -1,8 +1,25 @@
 # ADR 0020: replace kube-proxy with Cilium, and masquerade in eBPF
 
 - Date: 2026-11-18
-- Status: proposed
+- Status: rejected 2026-11-18, same day it was attempted. See PM-0012.
 - Supersedes nothing. Continues ADR 0019.
+
+## Why this was rejected
+
+Tried on 2026-11-18 at 11:03, reverted at 11:34.
+
+`kubeProxyReplacement` loads Cilium's socket load balancer, which needs CO-RE
+relocations, which need BTF in the kernel. zangetsu runs the Raspberry Pi
+vendor kernel and it has none, so the agent there never initialised its
+datapath and no new pod could get an endpoint on that node.
+
+The decision below is sound for hardware whose kernels carry BTF. It is not
+available here, and the test that would have caught it in one second is
+`ls /sys/kernel/btf/vmlinux` on each node.
+
+Everything that follows is kept as written, because the reasoning is still
+the reasoning, and because the next person to want this needs to know it was
+tried.
 
 ## Context
 

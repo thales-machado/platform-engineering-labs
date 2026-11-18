@@ -97,6 +97,34 @@ in that phase, both documented upstream:
   breaks DNS resolution. zangetsu runs the whole homelab Docker stack,
   including DNS on port 53, so this needs testing there specifically.
 
+## The planned fix is not available, 2026-11-18
+
+`bpf.masquerade` needs kube-proxy replacement, and kube-proxy replacement needs
+BTF, which zangetsu's kernel does not have. PM-0012 has the detail. So the fix
+named below cannot happen on this hardware.
+
+What the attempt did reveal is that the current state is more stable than it
+looked. The six `CILIUM_*` chains that Cilium managed to write into zangetsu's
+`nat` table during a brief window on 2026-11-17 survived four agent restarts
+that day and the next. Cilium cannot read that table, so it never removes them
+either. Egress on that node works, and keeps working, until the node reboots.
+
+That is still not a fix. It is an unmanaged rule set that no configuration
+describes and that disappears on reboot without warning.
+
+Three paths remain, in order of preference:
+
+1. **Write the masquerade rule ourselves, in nftables.** `nft` works on that
+   host; only `iptables` does not. A rule for `10.245.0.0/16`, installed by a
+   systemd unit so it survives reboots, with Cilium's own masquerading left
+   enabled but no longer load-bearing. Ugly, honest, and under configuration
+   management.
+2. **Give zangetsu a kernel with BTF.** That also unlocks kube-proxy
+   replacement and eBPF host routing. It is a change to the homelab's base
+   system, not to the lab.
+3. **Leave the pin.** cert-manager stays on urahara and the constraint is
+   documented. Cheapest, and it fails the next time any workload needs egress.
+
 ## Action items
 
 - [ ] Probe pod-to-internet egress from every node, and alert on it.
