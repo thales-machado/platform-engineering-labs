@@ -2,7 +2,7 @@
 
 - Date: 2026-11-17
 - Severity: medium (no user impact, certificate renewal at risk)
-- Status: mitigated (workaround in place, real fix scheduled)
+- Status: fixed 2026-11-18, verified across a reboot
 
 ## Impact
 
@@ -124,6 +124,49 @@ Three paths remain, in order of preference:
    system, not to the lab.
 3. **Leave the pin.** cert-manager stays on urahara and the constraint is
    documented. Cheapest, and it fails the next time any workload needs egress.
+
+## Fixed, 2026-11-18
+
+Option 1 from the list above: the masquerade rule is written by hand in
+nftables, in its own table, installed by a systemd unit on zangetsu.
+
+`homelab/scripts/networking/k8s-pod-masquerade.sh`:
+
+```
+table ip k8s-pod-masq {
+    chain postrouting {
+        type nat hook postrouting priority srcnat + 10; policy accept;
+        ip saddr 10.245.0.0/16 ip daddr != 10.245.0.0/16 oifname "eth0" masquerade
+    }
+}
+```
+
+It uses its own table, so it never touches `ip nat`, which `iptables-nft`
+manages and cannot read on that host. Priority `srcnat + 10` puts it after the
+normal nat table, so if Cilium ever installs its own rules again they win and
+this one becomes dead weight rather than a conflict.
+
+Verified by rebooting zangetsu, which is the only test that counts, because
+the state before this change depended on chains that a reboot destroys:
+
+| check | result |
+| --- | --- |
+| `uptime` | up 4 minutes, a real reboot |
+| the unit | `active (exited)`, PID 941, started at boot by systemd |
+| `CILIUM` chains in `ip nat` | **0**, the accidental ones are gone |
+| our rule's counter | **5 packets**, it is carrying the traffic |
+| pod on zangetsu to Let's Encrypt | `egress ok` |
+
+The `nodeSelector` pinning cert-manager to urahara is removed in the same
+commit. It existed only for this.
+
+## What this cost to learn
+
+Two days, and a path that went the wrong way twice. `bpf.masquerade` was the
+correct answer and needed kube-proxy replacement, which needed BTF, which this
+kernel does not have (PM-0012). The answer that worked was the unglamorous
+one: write the rule yourself, in the tool that works on that host, and put it
+under configuration management so the next reboot does not take it away.
 
 ## Action items
 
