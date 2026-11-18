@@ -2,7 +2,7 @@
 
 - Date: 2026-11-17
 - Severity: high (control plane unavailable in bursts, cluster unmanageable)
-- Status: mitigated (throttle and alert prepared, not yet applied)
+- Status: fixed (throttle applied and verified on the next run)
 
 ## Impact
 
@@ -92,6 +92,23 @@ past 8 seconds four hours before the first visible symptom.
 - [ ] Consider whether the lab's Prometheus and Loki belong on the same device
       as etcd at all. Moving them to the SATA disk costs query speed and buys
       isolation for the control plane.
+
+## Verification, 2026-11-18
+
+The read cap was applied on 2026-11-17 at 19:08, before that night's backup.
+The next run of the same job, on the same host and disk:
+
+| | 2026-11-17 | 2026-11-18 |
+| --- | --- | --- |
+| etcd WAL fsync p99, backup window | >= 8192 ms | 41 ms |
+| control plane restarts | 13 | 0 |
+
+One line of configuration, two orders of magnitude. The backup takes longer and
+no longer competes with etcd for the queue.
+
+That also settles the open question from the hypothesis above: the daytime
+read bursts were the failure feeding itself. With the first trigger removed,
+there were none.
 
 ## What this says about the lab
 
