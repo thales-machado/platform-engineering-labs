@@ -34,15 +34,24 @@ bpf:
   # briefly, so it is a change of its own, not a side effect of cleanup.
   hostLegacyRouting: true
 
-# ADR 0020. Cilium handles Services in eBPF instead of kube-proxy's iptables
-# chains. Enabled in phase 1 while kube-proxy is still installed, which is a
-# supported overlap and the point at which this is still trivially reversible.
-kubeProxyReplacement: true
+# ADR 0020 attempted this on 2026-11-18 and reverted it the same hour.
+#
+# kubeProxyReplacement loads Cilium's socket load balancer programs
+# (cil_sock4_connect and friends), which need CO-RE relocations, which need
+# BTF in the kernel. zangetsu runs 6.18.34+rpt-rpi-2712, the Raspberry Pi
+# vendor kernel, and it ships no BTF:
+#
+#   failed loading eBPF collection into the kernel: program cil_sock4_connect:
+#   apply CO-RE relocations: load kernel spec:
+#   no BTF found for kernel version 6.18.34+rpt-rpi-2712: not supported
+#
+# The agent then never initialises its datapath, so no new pod on that node
+# gets an endpoint. Existing pods keep working, which is what made it quiet.
+# See PM-0012.
+kubeProxyReplacement: false
 
-# Required without kube-proxy: there is no iptables rule for the kubernetes
-# Service any more, so the agents need the API server's real address. One
-# control plane, so this is urahara. If urahara is down the agents cannot
-# reach the API server, which was already true and is now written down.
+# Harmless with kube-proxy present, and required the moment it is not, so it
+# stays: the agents reach the API server directly instead of through a Service.
 k8sServiceHost: 192.168.15.215
 k8sServicePort: 6443
 
