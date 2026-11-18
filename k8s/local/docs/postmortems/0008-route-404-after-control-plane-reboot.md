@@ -66,6 +66,19 @@ two more caches that have to resync first.
 Plausible, and not proven. Writing it down as a hypothesis so the next control
 plane reboot can test it instead of guessing again.
 
+## Correction, 2026-11-17
+
+PM-0011 was found later the same day: half of every lookup for a lab hostname
+from inside the cluster returned NXDOMAIN, and had done so since the cluster
+was built.
+
+That does not explain the 404. A failed lookup never reaches Traefik, and
+Traefik is what answered `404 page not found`. But this postmortem's timeline
+rests on probes and curls issued from inside and outside the cluster in the
+same window, and the in-cluster half of that evidence was unreliable. The
+claim that the route took five minutes to come back is the part to treat as
+approximate.
+
 ## Action items
 
 - [ ] Probe every real hostname, not only the two netcheck targets. The
